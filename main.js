@@ -135,6 +135,7 @@ class EnemyShip {
         this.target = target;
         this.anGOAL = 0;
         this.angle = 0;
+        this.startCooldown = 120;
     }
 
     box() {
@@ -142,6 +143,7 @@ class EnemyShip {
     }
 
     loop() {
+        this.startCooldown--;
         this.anGOAL = Math.atan((this.y - this.target.y) / (this.x - this.target.x));
         if ((this.x - this.target.x) > 0) {
             this.anGOAL += Math.PI;
@@ -149,6 +151,10 @@ class EnemyShip {
         this.angle += loopize(this.anGOAL, this.angle) * 0.07;
         this.xv += Math.cos(this.angle) * 0.03;
         this.yv += Math.sin(this.angle) * 0.03;
+        if (this.startCooldown > 0) {
+            this.xv *= 0.8;
+            this.yv *= 0.8;
+        }
         this.x += this.xv;
         this.y += this.yv;
         this.x = coterminal(this.x, 800);
@@ -219,6 +225,37 @@ class Bullet {
 };
 
 
+class ExtraWalls {
+    constructor(x, y) {
+        this.rm = true;
+        this.x = x;
+        this.y = y;
+        this.w = 20;
+        this.h = 20;
+        this.isFirstLoop = true;
+    }
+
+    box() {
+        return [0, 0, 0, 0];
+    }
+
+    draw() {
+
+    }
+
+    loop() {
+        if (this.isFirstLoop) {
+            wallsCount += 2;
+            this.isFirstLoop = false;
+        }
+    }
+
+    destroy() {
+
+    }
+}
+
+
 class Fighter {
     constructor(x, y) {
         this.x = x;
@@ -284,6 +321,116 @@ class Fighter {
         ctx.translate(this.x, this.y);
         ctx.rotate(this.angle);
         ctx.fillRect(-50, -2, 50, 4);
+        ctx.beginPath();
+        ctx.moveTo(0, -20);
+        ctx.lineTo(0, 20);
+        ctx.lineTo(10, 0);
+        ctx.fill();
+        ctx.rotate(-this.angle);
+        ctx.translate(-this.x, -this.y);
+        ctx.fillStyle = "purple";
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.goalX, this.goalY);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(this.goalX, this.goalY, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.strokeStyle = "red";
+        ctx.lineWidth = 5;
+        ctx.moveTo(this.goalX, this.goalY);
+        ctx.lineTo(this.goalX + Math.cos(this.goalAngle) * 30, this.goalY + Math.sin(this.goalAngle) * 30);
+        ctx.stroke();
+        this.selected = false;
+    }
+
+    highlight() {
+        ctx.fillStyle = "yellow";
+        var box = this.box();
+        ctx.fillRect(box[0], box[1], box[2] - box[0], box[3] - box[1]);
+    }
+}
+
+
+class TieFighter {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.goalX = x;
+        this.goalY = y;
+        this.angle = Math.PI / 2;
+        this.selected = false;
+        this.xv = 0;
+        this.yv = 0;
+        this.goalAngle = 0;
+        this.shootCycle = 0;
+    }
+
+    destroy() {
+        this.rm = true;
+        score -= 30;
+    }
+
+    box() {
+        return [this.x - 20, this.y - 20, this.x + 20, this.y + 20];
+    }
+
+    loop() {
+        if ((this.x != this.goalX) || (this.y != this.goalY)) {
+            this.angle = Math.atan((this.y - this.goalY) / (this.x - this.goalX));
+            if (this.x > this.goalX) {
+                this.angle += Math.PI;
+            }
+        }
+        if (Math.abs(this.x - this.goalX) > 10 || Math.abs(this.y - this.goalY) > 10) {
+            this.xv += Math.cos(this.angle) * 0.2;
+            this.yv += Math.sin(this.angle) * 0.2;
+        }
+        else {
+            //const factor = 0.5;
+            this.angle = this.goalAngle;//this.angle = this.angle * factor + this.goalAngle * (1 - factor);
+        }
+        this.xv *= 0.95;
+        this.yv *= 0.95;
+        this.x += this.xv;
+        this.y += this.yv;
+        this.x = coterminal(this.x, 800);
+        this.y = coterminal(this.y, 800);
+        this.shootCycle--;
+        if (this.shootCycle < 0) {
+            this.shoot();
+            this.shootCycle = 30;
+        }
+    }
+
+    shoot() {
+        bullets.push(new Bullet(this.x, this.y, Math.cos(this.angle) * 10, Math.sin(this.angle) * 10));
+        bullets.push(new Bullet(this.x, this.y, Math.cos(this.angle + Math.PI) * 10, Math.sin(this.angle + Math.PI) * 10));
+    }
+
+    draw() {
+        if (this.selected) {
+            ctx.fillStyle = "yellow";
+        }
+        else {
+            ctx.fillStyle = "darkblue";
+        }
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+        ctx.fillRect(-50, -2, 50, 4);
+
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "black";
+        ctx.beginPath();
+        ctx.moveTo(-40, -5);
+        ctx.lineTo(-10, -5);
+        ctx.moveTo(-40, 5);
+        ctx.lineTo(-10, 5);
+        ctx.stroke();
+
         ctx.beginPath();
         ctx.moveTo(0, -20);
         ctx.lineTo(0, 20);
@@ -411,6 +558,8 @@ window.addEventListener("mouseup", (evt) => {
     }
 });
 
+wallsCount = 2;
+
 var toPlaceBlocks = 0;
 var didPlace = true;
 
@@ -420,6 +569,18 @@ var inventoryStuff = [
         name: "Fighter",
         maxCount: 4,
         cost: 20
+    },
+    {
+        type: TieFighter,
+        name: "Tie Fighter",
+        maxCount: 2,
+        cost: 40
+    },
+    {
+        type: ExtraWalls,
+        name: "Extra Walls",
+        maxCount: 3,
+        cost: 30
     }
 ];
 
@@ -442,6 +603,7 @@ setInterval(() => {
         ctx.textAlign = "center";
         ctx.fillText("BUY STUFF AND PRESS 'i' WHEN DONE", 400, 50);
         if (inventorySelected == -1) {
+            inventoryHovered = -1;
             inventoryStuff.forEach((type, i) => {
                 var x = (i % 5) * 160;
                 var y = 100 + Math.floor(i / 5) * 160;
@@ -455,7 +617,6 @@ setInterval(() => {
                 ctx.fillStyle = "purple";
                 ctx.textAlign = "center";
                 ctx.fillText(thingOccurences + "/" + type.maxCount, x + 80, y + 145);
-                inventoryHovered = -1;
                 if (thingOccurences < type.maxCount) {
                     if (mousePos.gameX > x && mousePos.gameX < x + 160 && mousePos.gameY > y && mousePos.gameY < y + 120) {
                         inventoryHovered = i;
@@ -484,7 +645,7 @@ setInterval(() => {
     if (countdown < 0) {
         isStratChange = true;
         if (!didPlace && toPlaceBlocks <= 0) {
-            toPlaceBlocks = 2;
+            toPlaceBlocks = wallsCount;
             didPlace = true;
         }
     }
