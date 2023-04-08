@@ -190,6 +190,86 @@ class EnemyShip {
 }
 
 
+class EnemyCruiser {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.xv = 0;
+        this.yv = 0;
+        this.anGOAL = 0;
+        this.angle = 0;
+        this.startCooldown = 120;
+    }
+
+    box() {
+        return [this.x - 5, this.y - 5, this.x + 5, this.y + 5];
+    }
+
+    loop() {
+        var closest = undefined;
+        var closestValue = Infinity;
+        fighters.forEach((fighter) => {
+            var dX = fighter.x - this.x;
+            var dY = fighter.y - this.y;
+            var distance = dX * dX + dY * dY;
+            if (distance < closestValue) {
+                closest = fighter;
+                closestValue = distance;
+            }
+        });
+        if (closest) {
+            this.target = closest;
+        }
+        else {
+            return;
+        }
+        this.startCooldown--;
+        this.anGOAL = Math.atan((this.y - this.target.y) / (this.x - this.target.x));
+        if ((this.x - this.target.x) > 0) {
+            this.anGOAL += Math.PI;
+        }
+        this.angle += loopize(this.anGOAL, this.angle) * 0.07;
+        this.xv += Math.cos(this.angle) * 0.03;
+        this.yv += Math.sin(this.angle) * 0.03;
+        if (this.startCooldown > 0) {
+            this.xv *= 0.8;
+            this.yv *= 0.8;
+        }
+        this.x += this.xv;
+        this.y += this.yv;
+        this.x = coterminal(this.x, 800);
+        this.y = coterminal(this.y, 800);
+        if (collision(this, this.target)) {
+            this.target.destroy();
+            this.destroy();
+        }
+    }
+
+    destroy(givePoints = true) {
+        this.rm = true;
+        if (givePoints) {
+            score += 15;
+        }
+    }
+
+    draw() {
+        ctx.strokeStyle = "white";
+        ctx.fillStyle = "brown";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, 5, 0, Math.PI * 2);
+        ctx.lineTo(25, 0);
+        ctx.rotate(-this.angle);
+        ctx.translate(-this.x, -this.y);
+        ctx.stroke();
+        ctx.fill();
+    }
+};
+
+
 class Bullet {
     constructor(x, y, xv, yv) {
         this.x = x;
@@ -593,6 +673,36 @@ function countFightersOfType(type) {
     return count;
 }
 
+var enemyTypes = [EnemyShip, EnemyCruiser];
+var probabilities = [1, 0];
+
+function chooseEnemyType() {
+    var total = 0;
+    for (var i = 0; i < probabilities.length; i++){
+        total += probabilities[i];
+    }
+    console.log(total);
+    var threshold = Math.random() * total;
+    var soFar = 0;
+    var pick = undefined;
+    for (var i = 0; i < enemyTypes.length; i++){
+        if (soFar < threshold) {
+            pick = enemyTypes[i];
+        }
+        soFar += probabilities[i];
+    }
+    return pick;
+}
+
+function bumpProbabilities() {
+    for (var i = 1; i < probabilities.length; i++){
+        probabilities[i] += probabilities[i - 1] * 0.1;
+        if (probabilities[i] > 1) {
+            probabilities[i] = 1;
+        }
+    }
+}
+
 setInterval(() => {
     ctx.fillStyle = "lightblue";
     ctx.fillRect(0, 0, 800, 800);
@@ -646,6 +756,7 @@ setInterval(() => {
         if (!didPlace && toPlaceBlocks <= 0) {
             toPlaceBlocks = wallsCount;
             didPlace = true;
+            bumpProbabilities();
         }
     }
 
@@ -683,7 +794,7 @@ setInterval(() => {
         if (Math.random() < 0.01) {
             var coords = [Math.random() * 800, Math.random() * 800];
             coords = clampToEdge(coords);
-            var newEnemy = new EnemyShip(coords[0], coords[1], castle);
+            var newEnemy = new (chooseEnemyType())(coords[0], coords[1], castle);
             newEnemy.angle = Math.random() * Math.PI * 2;
             enemies.push(newEnemy);
         }
