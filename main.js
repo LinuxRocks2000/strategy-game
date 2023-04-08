@@ -227,7 +227,6 @@ class Bullet {
 
 class ExtraWalls {
     constructor(x, y) {
-        this.rm = true;
         this.x = x;
         this.y = y;
         this.w = 20;
