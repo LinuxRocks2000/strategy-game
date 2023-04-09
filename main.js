@@ -190,6 +190,71 @@ class EnemyShip {
 }
 
 
+class PasserEnemy {
+    constructor(x, y, target) {
+        this.x = x;
+        this.y = y;
+        this.xv = 0;
+        this.yv = 0;
+        this.target = target;
+        this.anGOAL = 0;
+        this.angle = 0;
+        this.startCooldown = 120;
+        this.dontHitWalls = true;
+    }
+
+    box() {
+        return [this.x - 5, this.y - 5, this.x + 5, this.y + 5];
+    }
+
+    loop() {
+        this.startCooldown--;
+        this.anGOAL = Math.atan((this.y - this.target.y) / (this.x - this.target.x));
+        if ((this.x - this.target.x) > 0) {
+            this.anGOAL += Math.PI;
+        }
+        this.angle += loopize(this.anGOAL, this.angle) * 0.07;
+        this.xv += Math.cos(this.angle) * 0.03;
+        this.yv += Math.sin(this.angle) * 0.03;
+        if (this.startCooldown > 0) {
+            this.xv *= 0.85;
+            this.yv *= 0.85;
+        }
+        this.x += this.xv;
+        this.y += this.yv;
+        this.x = coterminal(this.x, 800);
+        this.y = coterminal(this.y, 800);
+        if (collision(this, this.target)) {
+            this.target.destroy();
+            this.destroy();
+        }
+    }
+
+    destroy(givePoints = true) {
+        this.rm = true;
+        if (givePoints) {
+            score += 10;
+        }
+    }
+
+    draw() {
+        ctx.strokeStyle = "black";
+        ctx.fillStyle = "black";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, 5, 0, Math.PI * 2);
+        ctx.lineTo(25, 0);
+        ctx.rotate(-this.angle);
+        ctx.translate(-this.x, -this.y);
+        ctx.stroke();
+        ctx.fill();
+    }
+}
+
+
 class EnemyCruiser {
     constructor(x, y) {
         this.x = x;
@@ -239,10 +304,6 @@ class EnemyCruiser {
         this.y += this.yv;
         this.x = coterminal(this.x, 800);
         this.y = coterminal(this.y, 800);
-        if (collision(this, this.target)) {
-            this.target.destroy();
-            this.destroy();
-        }
     }
 
     destroy(givePoints = true) {
@@ -267,7 +328,54 @@ class EnemyCruiser {
         ctx.stroke();
         ctx.fill();
     }
-};
+}
+
+
+class Burster {
+    constructor(x, y, target) {
+        this.x = x;
+        this.y = y;
+        this.target = target;
+        this.xv = Math.random();
+        this.yv = Math.random();
+        this.TTL = 120;
+    }
+
+    box() {
+        return [this.x - 10, this.y - 10, this.x + 10, this.y + 10];
+    }
+
+    loop() {
+        this.TTL--;
+        if (this.TTL < 0) {
+            this.destroy(false);
+            for (var i = 0; i < 7; i++){
+                var enemy = new EnemyShip(this.x, this.y, this.target);
+                enemy.anGOAL = Math.random() * Math.PI * 2;
+                enemy.xv = Math.random() * 10;
+                enemy.yv = Math.random() * 10;
+                enemy.startCooldown = 10;
+                enemies.push(enemy);
+            }
+        }
+        this.x += this.xv;
+        this.y += this.yv;
+        this.x = coterminal(this.x, 800);
+        this.y = coterminal(this.y, 800);
+    }
+
+    destroy(givePoints = true) {
+        this.rm = true;
+        if (givePoints) {
+            score += 15;
+        }
+    }
+
+    draw() {
+        ctx.fillStyle = "orange";
+        ctx.fillRect(this.x - 10, this.y - 10, 20, 20);
+    }
+}
 
 
 class Bullet {
@@ -295,6 +403,9 @@ class Bullet {
         this.y += this.yv;
         this.TTL--;
         if (this.TTL < 0) {
+            this.destroy();
+        }
+        if (this.x < 0 || this.x > 800 || this.y < 0 || this.y > 800) {
             this.destroy();
         }
     }
@@ -361,7 +472,7 @@ class Fighter {
     loop() {
         if ((this.x != this.goalX) || (this.y != this.goalY)) {
             this.angle = Math.atan((this.y - this.goalY) / (this.x - this.goalX));
-            if (this.x > this.goalX) {
+            if (this.x >= this.goalX) {
                 this.angle += Math.PI;
             }
         }
@@ -544,6 +655,142 @@ class TieFighter {
 }
 
 
+class SmartFighter {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.goalX = x;
+        this.goalY = y;
+        this.angle = Math.PI / 2;
+        this.selected = false;
+        this.xv = 0;
+        this.yv = 0;
+        this.goalAngle = 0;
+        this.shootCycle = 0;
+        this.turretAngle = 0;
+        this.turretGoal = 0;
+        this.shootCycle = 0;
+    }
+
+    destroy() {
+        this.rm = true;
+        score -= 30;
+    }
+
+    box() {
+        return [this.x - 20, this.y - 20, this.x + 20, this.y + 20];
+    }
+
+    loop() {
+        if ((this.x != this.goalX) || (this.y != this.goalY)) {
+            this.angle = Math.atan((this.y - this.goalY) / (this.x - this.goalX));
+            if (this.x >= this.goalX) {
+                this.angle += Math.PI;
+            }
+        }
+        if (Math.abs(this.x - this.goalX) > 10 || Math.abs(this.y - this.goalY) > 10) {
+            this.xv += Math.cos(this.angle) * 0.2;
+            this.yv += Math.sin(this.angle) * 0.2;
+        }
+        this.xv *= 0.9;
+        this.yv *= 0.9;
+        this.x += this.xv;
+        this.y += this.yv;
+        this.x = coterminal(this.x, 800);
+        this.y = coterminal(this.y, 800);
+        this.shootCycle--;
+        if (this.shootCycle < 0) {
+            this.shoot();
+            this.shootCycle = 30;
+        }
+        var nearestVal = Infinity;
+        var nearestDX = 0;
+        var nearestDY = 0;
+        enemies.forEach(enemy => {
+            var dX = enemy.x - this.x;
+            var dY = enemy.y - this.y;
+            var distance = dX * dX + dY * dY;
+            distance += (Math.atan2(dY, dX) - this.goalAngle) * 100; // weight based on how close to the goal angle enemy ships are
+            if (distance > 300) {
+                return;
+            }
+            if (distance < nearestVal) {
+                nearestVal = distance;
+                nearestDX = dX;
+                nearestDY = dY;
+            }
+        });
+        this.turretGoal = Math.atan2(nearestDY, nearestDX);
+        this.turretAngle -= (this.turretAngle - this.turretGoal) * 0.05;
+        this.shootCycle--;
+        if (this.shootCycle < 0) {
+            this.shootCycle = 30;
+            this.shoot(this.turretAngle);
+        }
+    }
+
+    shoot(angle) {
+        bullets.push(new Bullet(this.x, this.y, Math.cos(angle) * 10, Math.sin(angle) * 10));
+    }
+
+    draw() {
+        if (this.selected) {
+            ctx.fillStyle = "yellow";
+        }
+        else {
+            ctx.fillStyle = "#4455AA";
+        }
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+        ctx.fillRect(-50, -2, 50, 4);
+
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "white";
+        ctx.beginPath();
+        ctx.moveTo(-40, -5);
+        ctx.lineTo(-10, -5);
+        ctx.moveTo(-40, 5);
+        ctx.lineTo(-10, 5);
+        ctx.closePath();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, -20);
+        ctx.lineTo(0, 20);
+        ctx.lineTo(10, 0);
+        ctx.fill();
+
+        ctx.rotate(-this.angle);
+
+
+        ctx.translate(-this.x, -this.y);
+        ctx.fillStyle = "purple";
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.goalX, this.goalY);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(this.goalX, this.goalY, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.strokeStyle = "red";
+        ctx.lineWidth = 5;
+        ctx.moveTo(this.goalX, this.goalY);
+        ctx.lineTo(this.goalX + Math.cos(this.goalAngle) * 30, this.goalY + Math.sin(this.goalAngle) * 30);
+        ctx.stroke();
+        this.selected = false;
+    }
+
+    highlight() {
+        ctx.fillStyle = "yellow";
+        var box = this.box();
+        ctx.fillRect(box[0], box[1], box[2] - box[0], box[3] - box[1]);
+    }
+}
+
+
 var castle = new Castle(400, 400);
 var enemies = [];
 var fighters = [];
@@ -652,13 +899,19 @@ var inventoryStuff = [
     {
         type: TieFighter,
         name: "Tie Fighter",
-        maxCount: 2,
+        maxCount: 3,
         cost: 40
+    },
+    {
+        type: SmartFighter,
+        name: "Smart Fighter",
+        maxCount: 2,
+        cost: 80
     },
     {
         type: ExtraWalls,
         name: "Extra Walls",
-        maxCount: 3,
+        maxCount: 1,
         cost: 30
     }
 ];
@@ -673,8 +926,8 @@ function countFightersOfType(type) {
     return count;
 }
 
-var enemyTypes = [EnemyShip, EnemyCruiser];
-var probabilities = [1, 0];
+var enemyTypes = [EnemyShip, EnemyCruiser, PasserEnemy, Burster];
+var probabilities = [1, 0, 0, 0];
 
 function chooseEnemyType() {
     var total = 0;
@@ -696,7 +949,7 @@ function chooseEnemyType() {
 
 function bumpProbabilities() {
     for (var i = 1; i < probabilities.length; i++){
-        probabilities[i] += probabilities[i - 1] * 0.1;
+        probabilities[i] += probabilities[i - 1] * 0.2;
         if (probabilities[i] > 1) {
             probabilities[i] = 1;
         }
@@ -791,36 +1044,44 @@ setInterval(() => {
     }
     else {
         didPlace = false;
-        if (Math.random() < 0.01) {
-            var coords = [Math.random() * 800, Math.random() * 800];
-            coords = clampToEdge(coords);
-            var newEnemy = new (chooseEnemyType())(coords[0], coords[1], castle);
-            newEnemy.angle = Math.random() * Math.PI * 2;
-            enemies.push(newEnemy);
+        var eType = chooseEnemyType();
+        number = 1;
+        for (var x = 0; x < number; x++) {
+            if (Math.random() < 0.01) {
+                var coords = [Math.random() * 800, Math.random() * 800];
+                coords = clampToEdge(coords);
+                var newEnemy = new eType(coords[0], coords[1], castle);
+                newEnemy.angle = Math.random() * Math.PI * 2;
+                enemies.push(newEnemy);
+            }
         }
         enemies.forEach((enemy, index) => {
             enemy.loop();
             if (enemy.rm) {
                 enemies.splice(index, 1);
             }
-            fighters.forEach(fighter => {
-                if (collision(fighter, enemy)) {
-                    fighter.destroy();
-                    enemy.destroy();
-                }
-            });
+            if (!enemy.dontHitShips) {
+                fighters.forEach(fighter => {
+                    if (collision(fighter, enemy)) {
+                        fighter.destroy();
+                        enemy.destroy();
+                    }
+                });
+            }
             bullets.forEach(bullet => {
                 if (collision(bullet, enemy)) {
                     bullet.destroy();
                     enemy.destroy();
                 }
             });
-            blocks.forEach(block => {
-                if (collision(block, enemy)) {
-                    block.destroy();
-                    enemy.destroy(false);
-                }
-            });
+            if (!enemy.dontHitWalls) {
+                blocks.forEach(block => {
+                    if (collision(block, enemy)) {
+                        block.destroy();
+                        enemy.destroy(false);
+                    }
+                });
+            }
         });
 
         fighters.forEach((fighter, index) => {
