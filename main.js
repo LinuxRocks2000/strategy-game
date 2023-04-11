@@ -19,7 +19,7 @@ class Castle {
     }
 
     destroy() {
-        alert("Game over! Corrected score at difficulty" + difficulty + ": " + correctScore(score));
+        alert("Game over! Corrected score at difficulty " + difficulty + ": " + correctScore(score));
         window.location.reload();
     }
 
@@ -1216,7 +1216,7 @@ function startGame() {
             if (evt.key == "Enter") {
                 if (inventorySelected != -1) {
                     if (score >= inventoryStuff[inventorySelected].cost) {
-                        fighters.push(new inventoryStuff[inventorySelected].type(Math.random() * 700 + 50, Math.random() * 700 + 50));
+                        fighters.push(new inventoryStuff[inventorySelected].type(Math.random() * (gameSize - 100) + 50, Math.random() * (gameSize - 100) + 50));
                         score -= inventoryStuff[inventorySelected].cost;
                     }
                     inventorySelected = -1;
