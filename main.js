@@ -349,11 +349,11 @@ class Burster {
         this.TTL--;
         if (this.TTL < 0) {
             this.destroy(false);
-            for (var i = 0; i < 7; i++){
+            for (var i = 0; i < 5; i++){
                 var enemy = new EnemyShip(this.x, this.y, this.target);
                 enemy.anGOAL = Math.random() * Math.PI * 2;
-                enemy.xv = Math.random() * 10;
-                enemy.yv = Math.random() * 10;
+                enemy.xv = Math.random() * 20;
+                enemy.yv = Math.random() * 20;
                 enemy.startCooldown = 10;
                 enemies.push(enemy);
             }
@@ -710,7 +710,7 @@ class SmartFighter {
             var dX = enemy.x - this.x;
             var dY = enemy.y - this.y;
             var distance = dX * dX + dY * dY;
-            distance += (Math.atan2(dY, dX) - this.goalAngle) * 100; // weight based on how close to the goal angle enemy ships are
+            distance -= (Math.atan2(dY, dX) - this.goalAngle) * 100; // weight based on how close to the goal angle enemy ships are
             if (distance > 300) {
                 return;
             }
@@ -893,13 +893,13 @@ var inventoryStuff = [
     {
         type: Fighter,
         name: "Fighter",
-        maxCount: 4,
+        maxCount: 6,
         cost: 20
     },
     {
         type: TieFighter,
         name: "Tie Fighter",
-        maxCount: 3,
+        maxCount: 4,
         cost: 40
     },
     {
