@@ -1118,7 +1118,7 @@ function correctScore(score) {
     correctedD /= 8;
     correctedD *= 0.5;
     correctedD += 1;
-    return score * correctedD;
+    return Math.round(score * correctedD);
 }
 
 function startGame() {
