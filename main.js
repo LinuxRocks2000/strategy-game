@@ -1321,7 +1321,7 @@ function startGame() {
 
         ctx.font = "16px monospace";
         ctx.textAlign = "left";
-        ctx.fillText("" + correctScore(score), 10, 18);
+        ctx.fillText("" + score, 10, 18);
 
         if (isStratChange) {
             if (toPlaceBlocks <= 0) {
