@@ -19,7 +19,7 @@ class Castle {
     }
 
     destroy() {
-        alert("Game over! Your score: " + score);
+        alert("Game over! Corrected score at difficulty" + difficulty + ": " + correctScore(score));
         window.location.reload();
     }
 
@@ -115,13 +115,13 @@ function collision(one, two) {
 }
 
 function clampToEdge(coords) {
-    var distX = Math.min(coords[0], 800 - coords[0]); // distance to the nearest edge on the x axis
-    var distY = Math.min(coords[1], 800 - coords[1]); // ditto, but for y
+    var distX = Math.min(coords[0], gameSize - coords[0]); // distance to the nearest edge on the x axis
+    var distY = Math.min(coords[1], gameSize - coords[1]); // ditto, but for y
     if (distX > distY) {
-        coords[0] = Math.round(coords[0] / 800) * 800;
+        coords[0] = Math.round(coords[0] / gameSize) * gameSize;
     }
     else if (distY > distX) {
-        coords[1] = Math.round(coords[1] / 800) * 800;
+        coords[1] = Math.round(coords[1] / gameSize) * gameSize;
     }
     return coords;
 }
@@ -157,8 +157,8 @@ class EnemyShip {
         }
         this.x += this.xv;
         this.y += this.yv;
-        this.x = coterminal(this.x, 800);
-        this.y = coterminal(this.y, 800);
+        this.x = coterminal(this.x, gameSize);
+        this.y = coterminal(this.y, gameSize);
         if (collision(this, this.target)) {
             this.target.destroy();
             this.destroy();
@@ -222,8 +222,8 @@ class PasserEnemy {
         }
         this.x += this.xv;
         this.y += this.yv;
-        this.x = coterminal(this.x, 800);
-        this.y = coterminal(this.y, 800);
+        this.x = coterminal(this.x, gameSize);
+        this.y = coterminal(this.y, gameSize);
         if (collision(this, this.target)) {
             this.target.destroy();
             this.destroy();
@@ -302,8 +302,8 @@ class EnemyCruiser {
         }
         this.x += this.xv;
         this.y += this.yv;
-        this.x = coterminal(this.x, 800);
-        this.y = coterminal(this.y, 800);
+        this.x = coterminal(this.x, gameSize);
+        this.y = coterminal(this.y, gameSize);
     }
 
     destroy(givePoints = true) {
@@ -360,8 +360,8 @@ class Burster {
         }
         this.x += this.xv;
         this.y += this.yv;
-        this.x = coterminal(this.x, 800);
-        this.y = coterminal(this.y, 800);
+        this.x = coterminal(this.x, gameSize);
+        this.y = coterminal(this.y, gameSize);
     }
 
     destroy(givePoints = true) {
@@ -374,6 +374,77 @@ class Burster {
     draw() {
         ctx.fillStyle = "orange";
         ctx.fillRect(this.x - 10, this.y - 10, 20, 20);
+    }
+}
+
+
+class Ghost {
+    constructor(x, y, target) {
+        this.x = x;
+        this.y = y;
+        this.xv = 0;
+        this.yv = 0;
+        this.target = target;
+        this.anGOAL = 0;
+        this.angle = 0;
+        this.startCooldown = 120;
+    }
+
+    box() {
+        return [this.x - 5, this.y - 5, this.x + 5, this.y + 5];
+    }
+
+    loop() {
+        this.startCooldown--;
+        this.anGOAL = Math.atan((this.y - this.target.y) / (this.x - this.target.x));
+        if ((this.x - this.target.x) > 0) {
+            this.anGOAL += Math.PI;
+        }
+        this.angle += loopize(this.anGOAL, this.angle) * 0.07;
+        this.xv += Math.cos(this.angle) * 0.03;
+        this.yv += Math.sin(this.angle) * 0.03;
+        if (this.startCooldown > 0) {
+            this.xv *= 0.8;
+            this.yv *= 0.8;
+        }
+        this.x += this.xv;
+        this.y += this.yv;
+        this.x = coterminal(this.x, gameSize);
+        this.y = coterminal(this.y, gameSize);
+        if (collision(this, this.target)) {
+            this.target.destroy();
+            this.destroy();
+        }
+    }
+
+    destroy(givePoints = true) {
+        this.rm = true;
+        if (givePoints) {
+            score += 10;
+        }
+    }
+
+    draw() {
+        var dX = this.x - this.target.x;
+        var dY = this.y - this.target.y;
+        var dist = Math.sqrt(dX * dX + dY * dY);
+        dist = dist / gameSize; // Reduce it to a percentage of the distance from the castle to the edge - note, this does not take into account pythagorean's theorem.
+        dist *= 4.5;
+        ctx.globalAlpha = Math.tanh(dist) * -1 + 1;
+        ctx.strokeStyle = "black";
+        ctx.fillStyle = "green";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, 5, 0, Math.PI * 2);
+        ctx.lineTo(25, 0);
+        ctx.rotate(-this.angle);
+        ctx.translate(-this.x, -this.y);
+        ctx.stroke();
+        ctx.fill();
+        ctx.globalAlpha = 1;
     }
 }
 
@@ -405,7 +476,7 @@ class Bullet {
         if (this.TTL < 0) {
             this.destroy();
         }
-        if (this.x < 0 || this.x > 800 || this.y < 0 || this.y > 800) {
+        if (this.x < 0 || this.x > gameSize || this.y < 0 || this.y > gameSize) {
             this.destroy();
         }
     }
@@ -488,8 +559,8 @@ class Fighter {
         this.yv *= 0.95;
         this.x += this.xv;
         this.y += this.yv;
-        this.x = coterminal(this.x, 800);
-        this.y = coterminal(this.y, 800);
+        this.x = coterminal(this.x, gameSize);
+        this.y = coterminal(this.y, gameSize);
         this.shootCycle--;
         if (this.shootCycle < 0) {
             this.shoot();
@@ -587,8 +658,8 @@ class TieFighter {
         this.yv *= 0.95;
         this.x += this.xv;
         this.y += this.yv;
-        this.x = coterminal(this.x, 800);
-        this.y = coterminal(this.y, 800);
+        this.x = coterminal(this.x, gameSize);
+        this.y = coterminal(this.y, gameSize);
         this.shootCycle--;
         if (this.shootCycle < 0) {
             this.shoot();
@@ -696,8 +767,8 @@ class SmartFighter {
         this.yv *= 0.9;
         this.x += this.xv;
         this.y += this.yv;
-        this.x = coterminal(this.x, 800);
-        this.y = coterminal(this.y, 800);
+        this.x = coterminal(this.x, gameSize);
+        this.y = coterminal(this.y, gameSize);
         this.shootCycle--;
         if (this.shootCycle < 0) {
             this.shoot();
@@ -791,16 +862,122 @@ class SmartFighter {
 }
 
 
-var castle = new Castle(400, 400);
+class FourShooter {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.goalX = x;
+        this.goalY = y;
+        this.angle = Math.PI / 2;
+        this.selected = false;
+        this.xv = 0;
+        this.yv = 0;
+        this.goalAngle = 0;
+        this.shootCycle = 0;
+    }
+
+    destroy() {
+        this.rm = true;
+        score -= 30;
+    }
+
+    box() {
+        return [this.x - 20, this.y - 20, this.x + 20, this.y + 20];
+    }
+
+    loop() {
+        if ((this.x != this.goalX) || (this.y != this.goalY)) {
+            this.angle = Math.atan((this.y - this.goalY) / (this.x - this.goalX));
+            if (this.x >= this.goalX) {
+                this.angle += Math.PI;
+            }
+        }
+        if (Math.abs(this.x - this.goalX) > 10 || Math.abs(this.y - this.goalY) > 10) {
+            this.xv += Math.cos(this.angle) * 0.1;
+            this.yv += Math.sin(this.angle) * 0.1;
+        }
+        else {
+            //const factor = 0.5;
+            this.angle = this.goalAngle;//this.angle = this.angle * factor + this.goalAngle * (1 - factor);
+        }
+        this.xv *= 0.95;
+        this.yv *= 0.95;
+        this.x += this.xv;
+        this.y += this.yv;
+        this.x = coterminal(this.x, gameSize);
+        this.y = coterminal(this.y, gameSize);
+        this.shootCycle--;
+        if (this.shootCycle < 0) {
+            this.shoot();
+            this.shootCycle = 30;
+        }
+    }
+
+    _shoot(angle) {
+        bullets.push(new Bullet(this.x, this.y, Math.cos(angle) * 10, Math.sin(angle) * 10));
+    }
+
+    shoot() {
+        this._shoot(this.angle);
+        this._shoot(this.angle + Math.PI / 2);
+        this._shoot(this.angle + Math.PI);
+        this._shoot(this.angle + Math.PI * 3 / 2);
+    }
+
+    draw() {
+        if (this.selected) {
+            ctx.fillStyle = "yellow";
+        }
+        else {
+            ctx.fillStyle = "grey";
+        }
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+        ctx.beginPath();
+        ctx.moveTo(20, 0);
+        ctx.lineTo(6, 6);
+        ctx.lineTo(0, 20);
+        ctx.lineTo(-6, 6);
+        ctx.lineTo(-20, 0);
+        ctx.lineTo(-6, -6);
+        ctx.lineTo(0, -20);
+        ctx.lineTo(6, -6);
+        ctx.fill();
+        ctx.rotate(-this.angle);
+
+
+        ctx.translate(-this.x, -this.y);
+        ctx.fillStyle = "purple";
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.goalX, this.goalY);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(this.goalX, this.goalY, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.strokeStyle = "red";
+        ctx.lineWidth = 5;
+        ctx.moveTo(this.goalX, this.goalY);
+        ctx.lineTo(this.goalX + Math.cos(this.goalAngle) * 30, this.goalY + Math.sin(this.goalAngle) * 30);
+        ctx.stroke();
+        this.selected = false;
+    }
+
+    highlight() {
+        ctx.fillStyle = "yellow";
+        var box = this.box();
+        ctx.fillRect(box[0], box[1], box[2] - box[0], box[3] - box[1]);
+    }
+}
+
+
 var enemies = [];
 var fighters = [];
 var bullets = [];
 var blocks = [];
-
-fighters.push(new Fighter(600, 400));
-fighters.push(new Fighter(400, 600));
-fighters.push(new Fighter(200, 400));
-fighters.push(new Fighter(400, 200));
 
 var isStratChange = true;
 
@@ -828,61 +1005,6 @@ var inventory = false;
 var inventoryHovered = -1;
 var inventorySelected = -1;
 
-window.addEventListener("keyup", evt => {
-    if (!inventory) {
-        if (evt.key == "Enter") {
-            if (isStratChange) {
-                isStratChange = false;
-                countdown = 240;
-            }
-        }
-        if (evt.key == " ") {
-            toPlaceBlocks--;
-        }
-    }
-    else {
-        if (evt.key == "Enter") {
-            if (inventorySelected != -1) {
-                if (score >= inventoryStuff[inventorySelected].cost) {
-                    fighters.push(new inventoryStuff[inventorySelected].type(Math.random() * 700 + 50, Math.random() * 700 + 50));
-                    score -= inventoryStuff[inventorySelected].cost;
-                }
-                inventorySelected = -1;
-            }
-        }
-    }
-    if (evt.key == "i") {
-        if (isStratChange) {
-            inventory = !inventory;
-        }
-    }
-});
-
-window.addEventListener("mouseup", (evt) => {
-    if (inventory) {
-        if (inventorySelected == -1) {
-            inventorySelected = inventoryHovered;
-        }
-        else {
-            inventorySelected = -1;
-        }
-    }
-    else {
-        if (toPlaceBlocks > 0 && isStratChange) {
-            blocks.push(new Block(mousePos.gameX - 15, mousePos.gameY - 15, 30, 30));
-            toPlaceBlocks--;
-        }
-        else {
-            if (selected != -1 && !isAngleAdjust) {
-                isAngleAdjust = true;
-            }
-            else {
-                selected = hovered;
-                isAngleAdjust = false;
-            }
-        }
-    }
-});
 
 wallsCount = 2;
 
@@ -906,7 +1028,13 @@ var inventoryStuff = [
         type: SmartFighter,
         name: "Smart Fighter",
         maxCount: 2,
-        cost: 80
+        cost: 60
+    },
+    {
+        type: FourShooter,
+        name: "Four Shooter",
+        maxCount: 2,
+        cost: 100
     },
     {
         type: ExtraWalls,
@@ -926,8 +1054,8 @@ function countFightersOfType(type) {
     return count;
 }
 
-var enemyTypes = [EnemyShip, EnemyCruiser, PasserEnemy, Burster];
-var probabilities = [1, 0, 0, 0];
+var enemyTypes = [EnemyShip, EnemyCruiser, Ghost, PasserEnemy, Burster];
+var probabilities = [1, 0, 0, 0, 0];
 
 function chooseEnemyType() {
     var total = 0;
@@ -956,189 +1084,371 @@ function bumpProbabilities() {
     }
 }
 
-setInterval(() => {
-    ctx.fillStyle = "lightblue";
-    ctx.fillRect(0, 0, 800, 800);
-    if (inventory) {
-        ctx.fillStyle = "red";  
-        ctx.font = "bold 40px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText("BUY STUFF AND PRESS 'i' WHEN DONE", 400, 50);
-        if (inventorySelected == -1) {
-            inventoryHovered = -1;
-            inventoryStuff.forEach((type, i) => {
-                var x = (i % 5) * 160;
-                var y = 100 + Math.floor(i / 5) * 160;
-                var thingOccurences = countFightersOfType(type.type);
-                ctx.font = "18px sans-serif";
-                ctx.fillStyle = "black";
-                ctx.textAlign = "center";
-                ctx.fillText(type.name, x + 80, y + 40);
-                (new type.type(x + 80, y + 110)).draw();
+var gameSize = 800; // default value
+var castle = undefined;
+
+var difficulty = 0;
+/* The difficulty calculation:
+Add based on the size:
+    If on small size, 10
+    If on medium size, 6
+    If on big size, 4
+    If on huge size, 2
+    If on massive size, 0
+
+For each fixed bullet per round (1 per regular fighter, 2 per tie fighter, 4 per four-shooter), subtract 1
+For each Smart Fighter, subtract 3
+
+Thus, default quad-fighter at default size is 6 - 4 = 2.
+the lowest possible difficulty is 0 (massive) - 8 (most OP starting arrangement), -8
+the highest possible difficulty is 10 - 2 (least OP starting arrangement), 8
+thus, divide difficulty by 8
+
+To calculate corrected score:
+difficulty -= 2 // normalize for the average difficulty
+difficulty /= 8 // convert it to a percentage
+difficulty *= 0.5 // don't let difficulty changes affect the score more than halfway
+difficulty += 1 // make it so a 0 corrected difficulty has no impact on the score
+score = score * difficulty
+*/
+
+function correctScore(score) {
+    var correctedD = difficulty;
+    correctedD -= 2;
+    correctedD /= 8;
+    correctedD *= 0.5;
+    correctedD += 1;
+    return score * correctedD;
+}
+
+function startGame() {
+    switch (document.getElementById("size").value) {
+        case "medium":
+            gameSize = 800;
+            difficulty += 6;
+            break;
+        case "small":
+            gameSize = 500;
+            difficulty += 10
+            break;
+        case "big":
+            gameSize = 1000;
+            difficulty += 4
+            break;
+        case "huge":
+            gameSize = 1400;
+            difficulty += 2
+            break;
+        case "massive":
+            gameSize = 2000;
+            break;
+    }
+    canvas.width = gameSize;
+    canvas.height = gameSize;
+    castle = new Castle(gameSize/2, gameSize/2);
+    switch (document.getElementById("formation").value) {
+        case "quad":
+            fighters.push(new Fighter(gameSize/2 + 200, gameSize/2));
+            fighters.push(new Fighter(gameSize/2, gameSize/2 + 200));
+            fighters.push(new Fighter(gameSize/2 - 200, gameSize/2));
+            fighters.push(new Fighter(gameSize / 2, gameSize / 2 - 200));
+            break;
+        case "hex":
+            fighters.push(new Fighter(gameSize/2 + 200, gameSize/2));
+            fighters.push(new Fighter(gameSize/2 - 200, gameSize/2));
+            fighters.push(new Fighter(gameSize/2 - 100, gameSize/2 + 150));
+            fighters.push(new Fighter(gameSize/2 + 100, gameSize/2 + 150));
+            fighters.push(new Fighter(gameSize/2 - 100, gameSize/2 - 150));
+            fighters.push(new Fighter(gameSize / 2 + 100, gameSize / 2 - 150));
+            break;
+        case "defendedHex":
+            fighters.push(new Fighter(gameSize/2 + 200, gameSize/2));
+            fighters.push(new Fighter(gameSize/2 - 200, gameSize/2));
+            fighters.push(new Fighter(gameSize/2 - 100, gameSize/2 + 150));
+            fighters.push(new Fighter(gameSize/2 + 100, gameSize/2 + 150));
+            fighters.push(new Fighter(gameSize/2 - 100, gameSize/2 - 150));
+            fighters.push(new Fighter(gameSize / 2 + 100, gameSize / 2 - 150));
+            fighters.push(new TieFighter(gameSize / 2, gameSize / 2));
+        case "qplust":
+            fighters.push(new Fighter(gameSize/2 + 200, gameSize/2));
+            fighters.push(new Fighter(gameSize/2, gameSize/2 + 200));
+            fighters.push(new Fighter(gameSize/2 - 200, gameSize/2));
+            fighters.push(new Fighter(gameSize/2, gameSize/2 - 200));
+            fighters.push(new TieFighter(gameSize / 2, gameSize / 2));
+            break;
+        case "twof":
+            fighters.push(new Fighter(gameSize/2 + 200, gameSize/2));
+            fighters.push(new Fighter(gameSize / 2 - 200, gameSize / 2));
+            break;
+        case "tiefighter":
+            fighters.push(new TieFighter(gameSize / 2, gameSize / 2));
+            break;
+    }
+    fighters.forEach(item => {
+        switch (item.constructor) {
+            case Fighter:
+                difficulty -= 1;
+                break;
+            case TieFighter:
+                difficulty -= 2;
+                break;
+            case FourShooter:
+                difficulty -= 4;
+                break;
+            case SmartFighter:
+                difficulty -= 3;
+        }
+    });
+    document.getElementById("startGameScreen").style.display = "none";
+    window.addEventListener("keyup", evt => {
+        if (!inventory) {
+            if (evt.key == "Enter") {
+                if (isStratChange) {
+                    isStratChange = false;
+                    countdown = 240;
+                }
+            }
+            if (evt.key == " ") {
+                toPlaceBlocks--;
+            }
+        }
+        else {
+            if (evt.key == "Enter") {
+                if (inventorySelected != -1) {
+                    if (score >= inventoryStuff[inventorySelected].cost) {
+                        fighters.push(new inventoryStuff[inventorySelected].type(Math.random() * 700 + 50, Math.random() * 700 + 50));
+                        score -= inventoryStuff[inventorySelected].cost;
+                    }
+                    inventorySelected = -1;
+                }
+            }
+        }
+        if (evt.key == "i") {
+            if (isStratChange) {
+                inventory = !inventory;
+            }
+        }
+    });
+
+    window.addEventListener("mouseup", (evt) => {
+        if (inventory) {
+            if (inventorySelected == -1) {
+                inventorySelected = inventoryHovered;
+            }
+            else {
+                inventorySelected = -1;
+            }
+        }
+        else {
+            if (toPlaceBlocks > 0 && isStratChange) {
+                blocks.push(new Block(mousePos.gameX - 15, mousePos.gameY - 15, 30, 30));
+                toPlaceBlocks--;
+            }
+            else {
+                if (selected != -1 && !isAngleAdjust) {
+                    isAngleAdjust = true;
+                }
+                else {
+                    selected = hovered;
+                    isAngleAdjust = false;
+                }
+            }
+        }
+    });
+    setInterval(() => {
+        ctx.fillStyle = "lightblue";
+        ctx.fillRect(0, 0, gameSize, gameSize);
+        if (inventory) {
+            ctx.fillStyle = "red";
+            ctx.font = "bold 40px monospace";
+            if (gameSize < 800) {
+                ctx.font = "bold 25px monospace";
+            }
+            ctx.textAlign = "center";
+            ctx.fillText("BUY STUFF AND PRESS 'i' WHEN DONE", gameSize / 2, 50);
+            fitSize = Math.floor(gameSize / 160);
+            if (inventorySelected == -1) {
+                inventoryHovered = -1;
+                inventoryStuff.forEach((type, i) => {
+                    var x = (i % fitSize) * 160;
+                    var y = 100 + Math.floor(i / fitSize) * 160;
+                    var thingOccurences = countFightersOfType(type.type);
+                    ctx.font = "18px sans-serif";
+                    ctx.fillStyle = "black";
+                    ctx.textAlign = "center";
+                    ctx.fillText(type.name, x + 80, y + 40);
+                    (new type.type(x + 80, y + 110)).draw();
+                    ctx.font = "18px sans-serif";
+                    ctx.fillStyle = "purple";
+                    ctx.textAlign = "center";
+                    ctx.fillText(thingOccurences + "/" + type.maxCount, x + 80, y + 145);
+                    if (thingOccurences < type.maxCount) {
+                        if (mousePos.gameX > x && mousePos.gameX < x + 160 && mousePos.gameY > y && mousePos.gameY < y + 120) {
+                            inventoryHovered = i;
+                            ctx.strokeStyle = "yellow";
+                            ctx.strokeRect(x, y, 160, 160);
+                        }
+                    }
+                });
+            }
+            else {
+                (new inventoryStuff[inventorySelected].type(gameSize/2, gameSize/2)).draw();
                 ctx.font = "18px sans-serif";
                 ctx.fillStyle = "purple";
                 ctx.textAlign = "center";
-                ctx.fillText(thingOccurences + "/" + type.maxCount, x + 80, y + 145);
-                if (thingOccurences < type.maxCount) {
-                    if (mousePos.gameX > x && mousePos.gameX < x + 160 && mousePos.gameY > y && mousePos.gameY < y + 120) {
-                        inventoryHovered = i;
-                        ctx.strokeStyle = "yellow";
-                        ctx.strokeRect(x, y, 160, 160);
-                    }
+                ctx.fillText("Cost: " + inventoryStuff[inventorySelected].cost, gameSize/2, gameSize/2 + 100);
+                if (score >= inventoryStuff[inventorySelected].cost) {
+                    ctx.fillText("Press enter to buy, or click anywhere to exit.", gameSize/2, gameSize/2 + 200);
                 }
-            });
+                else {
+                    ctx.fillText("You can't afford it! Press enter to exit.", gameSize/2, gameSize/2 + 200);
+                }
+            }
+            return;
         }
-        else {
-            (new inventoryStuff[inventorySelected].type(400, 400)).draw();
-            ctx.font = "18px sans-serif";
-            ctx.fillStyle = "purple";
-            ctx.textAlign = "center";
-            ctx.fillText("Cost: " + inventoryStuff[inventorySelected].cost, 400, 500);
-            if (score >= inventoryStuff[inventorySelected].cost) {
-                ctx.fillText("Press enter to buy, or click anywhere to exit.", 400, 600);
+        countdown--;
+        if (countdown < 0) {
+            isStratChange = true;
+            if (!didPlace && toPlaceBlocks <= 0) {
+                toPlaceBlocks = wallsCount;
+                didPlace = true;
+                bumpProbabilities();
+            }
+        }
+
+        ctx.fillStyle = "black";
+        ctx.fillRect(mousePos.gameX - 5, mousePos.gameY - 5, 10, 10);
+
+        ctx.font = "16px monospace";
+        ctx.textAlign = "left";
+        ctx.fillText("" + correctScore(score), 10, 18);
+
+        if (isStratChange) {
+            if (toPlaceBlocks <= 0) {
+                ctx.fillStyle = "red";
+                ctx.font = "bold 40px monospace";
+                if (gameSize < 800) {
+                    ctx.font = "bold 25px monospace";
+                }
+                ctx.textAlign = "center";
+                ctx.fillText("MOVE YOUR SHIPS AND PRESS ENTER", gameSize/2, 50);
+                hovered = -1;
+                fighters.forEach((fighter, index) => {
+                    var box = untwist(fighter.box());
+                    if (mousePos.gameX > box[0] && mousePos.gameX < box[2] && mousePos.gameY > box[1] && mousePos.gameY < box[3]) {
+                        fighter.highlight();
+                        hovered = index;
+                    }
+                });
             }
             else {
-                ctx.fillText("Insufficient score to buy! Press enter or click anywhere to exit.", 400, 600);
-            }
-        }
-        return;
-    }
-    countdown--;
-    if (countdown < 0) {
-        isStratChange = true;
-        if (!didPlace && toPlaceBlocks <= 0) {
-            toPlaceBlocks = wallsCount;
-            didPlace = true;
-            bumpProbabilities();
-        }
-    }
-
-    ctx.fillStyle = "black";
-    ctx.fillRect(mousePos.gameX - 5, mousePos.gameY - 5, 10, 10);
-
-    ctx.font = "16px monospace";
-    ctx.textAlign = "left";
-    ctx.fillText("" + score, 10, 18);
-
-    if (isStratChange) {
-        if (toPlaceBlocks <= 0) {
-            ctx.fillStyle = "red";
-            ctx.font = "bold 40px monospace";
-            ctx.textAlign = "center";
-            ctx.fillText("MOVE YOUR SHIPS AND PRESS ENTER", 400, 50);
-            hovered = -1;
-            fighters.forEach((fighter, index) => {
-                var box = untwist(fighter.box());
-                if (mousePos.gameX > box[0] && mousePos.gameX < box[2] && mousePos.gameY > box[1] && mousePos.gameY < box[3]) {
-                    fighter.highlight();
-                    hovered = index;
+                ctx.fillStyle = "red";
+                ctx.font = "bold 40px monospace";
+                if (gameSize < 800) {
+                    ctx.font = "bold 25px monospace";
                 }
-            });
+                ctx.textAlign = "center";
+                ctx.fillText("PLACE " + toPlaceBlocks + " WALLS", gameSize/2, 50);
+            }
         }
         else {
-            ctx.fillStyle = "red";
-            ctx.font = "bold 40px monospace";
-            ctx.textAlign = "center";
-            ctx.fillText("PLACE " + toPlaceBlocks + " WALLS", 400, 50);
-        }
-    }
-    else {
-        didPlace = false;
-        var eType = chooseEnemyType();
-        number = 1;
-        for (var x = 0; x < number; x++) {
-            if (Math.random() < 0.01) {
-                var coords = [Math.random() * 800, Math.random() * 800];
-                coords = clampToEdge(coords);
-                var newEnemy = new eType(coords[0], coords[1], castle);
-                newEnemy.angle = Math.random() * Math.PI * 2;
-                enemies.push(newEnemy);
+            didPlace = false;
+            var eType = chooseEnemyType();
+            number = 1;
+            for (var x = 0; x < number; x++) {
+                if (Math.random() < 0.01) {
+                    var coords = [Math.random() * gameSize, Math.random() * gameSize];
+                    coords = clampToEdge(coords);
+                    var newEnemy = new eType(coords[0], coords[1], castle);
+                    newEnemy.angle = Math.random() * Math.PI * 2;
+                    enemies.push(newEnemy);
+                }
             }
-        }
-        enemies.forEach((enemy, index) => {
-            enemy.loop();
-            if (enemy.rm) {
-                enemies.splice(index, 1);
-            }
-            if (!enemy.dontHitShips) {
-                fighters.forEach(fighter => {
-                    if (collision(fighter, enemy)) {
-                        fighter.destroy();
+            enemies.forEach((enemy, index) => {
+                enemy.loop();
+                if (enemy.rm) {
+                    enemies.splice(index, 1);
+                }
+                if (!enemy.dontHitShips) {
+                    fighters.forEach(fighter => {
+                        if (collision(fighter, enemy)) {
+                            fighter.destroy();
+                            enemy.destroy();
+                        }
+                    });
+                }
+                bullets.forEach(bullet => {
+                    if (collision(bullet, enemy)) {
+                        bullet.destroy();
                         enemy.destroy();
                     }
                 });
-            }
-            bullets.forEach(bullet => {
-                if (collision(bullet, enemy)) {
-                    bullet.destroy();
-                    enemy.destroy();
+                if (!enemy.dontHitWalls) {
+                    blocks.forEach(block => {
+                        if (collision(block, enemy)) {
+                            block.destroy();
+                            enemy.destroy(false);
+                        }
+                    });
                 }
             });
-            if (!enemy.dontHitWalls) {
-                blocks.forEach(block => {
-                    if (collision(block, enemy)) {
-                        block.destroy();
-                        enemy.destroy(false);
-                    }
-                });
-            }
+
+            fighters.forEach((fighter, index) => {
+                fighter.loop();
+                if (fighter.rm) {
+                    fighters.splice(index, 1);
+                }
+            });
+
+            bullets.forEach((bullet, index) => {
+                bullet.loop();
+                if (bullet.rm) {
+                    bullets.splice(index, 1);
+                }
+            });
+
+            blocks.forEach((block, index) => {
+                block.loop();
+                if (block.rm) {
+                    blocks.splice(index, 1);
+                }
+            });
+        }
+
+        enemies.forEach((enemy) => {
+            enemy.draw();
+        });
+
+        bullets.forEach((bullet) => {
+            bullet.draw();
+        });
+
+        blocks.forEach((block) => {
+            block.draw();
         });
 
         fighters.forEach((fighter, index) => {
-            fighter.loop();
-            if (fighter.rm) {
-                fighters.splice(index, 1);
-            }
-        });
-
-        bullets.forEach((bullet, index) => {
-            bullet.loop();
-            if (bullet.rm) {
-                bullets.splice(index, 1);
-            }
-        });
-
-        blocks.forEach((block, index) => {
-            block.loop();
-            if (block.rm) {
-                blocks.splice(index, 1);
-            }
-        });
-    }
-
-    enemies.forEach((enemy) => {
-        enemy.draw();
-    });
-
-    bullets.forEach((bullet) => {
-        bullet.draw();
-    });
-
-    blocks.forEach((block) => {
-        block.draw();
-    });
-
-    fighters.forEach((fighter, index) => {
-        if (index == selected) {
-            if (isAngleAdjust) {
-                fighter.goalAngle = Math.atan((fighter.goalY - mousePos.gameY) / (fighter.goalX - mousePos.gameX));
-                if (fighter.goalX >= mousePos.gameX) {
-                    fighter.goalAngle += Math.PI;
+            if (index == selected) {
+                if (isAngleAdjust) {
+                    fighter.goalAngle = Math.atan((fighter.goalY - mousePos.gameY) / (fighter.goalX - mousePos.gameX));
+                    if (fighter.goalX >= mousePos.gameX) {
+                        fighter.goalAngle += Math.PI;
+                    }
+                    ctx.lineWidth = 10;
+                    ctx.strokeStyle = "red";
+                    ctx.beginPath();
+                    ctx.moveTo(fighter.goalX, fighter.goalY);
+                    ctx.lineTo(fighter.goalX + Math.cos(fighter.goalAngle) * 50, fighter.goalY + Math.sin(fighter.goalAngle) * 50);
+                    ctx.stroke();
                 }
-                ctx.lineWidth = 10;
-                ctx.strokeStyle = "red";
-                ctx.beginPath();
-                ctx.moveTo(fighter.goalX, fighter.goalY);
-                ctx.lineTo(fighter.goalX + Math.cos(fighter.goalAngle) * 50, fighter.goalY + Math.sin(fighter.goalAngle) * 50);
-                ctx.stroke();
+                else {
+                    fighter.selected = true;
+                    fighter.goalX = mousePos.gameX;
+                    fighter.goalY = mousePos.gameY;
+                }
             }
-            else {
-                fighter.selected = true;
-                fighter.goalX = mousePos.gameX;
-                fighter.goalY = mousePos.gameY;
-            }
-        }
-        fighter.draw();
-    });
-    castle.draw();
-}, 1000/FPS);
+            fighter.draw();
+        });
+        castle.draw();
+    }, 1000 / FPS);
+}

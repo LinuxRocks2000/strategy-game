@@ -1,11 +1,70 @@
 body {
     background-color: darkblue;
+    text-align: center;
 }
 
 #game {
-    position: absolute;
+    /*position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%);*/
     border: 1px solid white;
+}
+
+#startGameScreen {
+    width: 100vw;
+    height: 100vh;
+    position: fixed;
+    top: 0px;
+    left: 0px;
+    background-color: aquamarine;
+    display: grid;
+    grid-template-areas:
+    '. .         . .    . . .'
+    '. highscore . .    . . .'
+    '. highscore . menu . . .'
+    '. .         . menu . . .'
+    '. .         . .    . . .';
+    grid-template-columns: 5% 30% 5% 30% 20% 10%;
+}
+
+#startGameScreen > * {
+    border-radius: 50px;
+    padding: 50px;
+    background-color: white;
+    box-shadow: 30px 30px 30px 10px black;
+    margin: auto;
+}
+
+#menu {
+    display: inline-block;
+    grid-area: menu;
+    min-height: 500px;
+    min-width: 300px;
+}
+
+#highscore{
+    grid-area: highscore;
+}
+
+h1, h2{
+    text-align: center;
+}
+
+* {
+    font-family: sans-serif;
+}
+
+#startGame {
+    text-align: center;
+    border: none;
+    margin-top: 50px;
+    position: relative;
+    background-color: rgb(240, 62, 62);
+    border-radius: 20px;
+    padding: 20px;
+}
+
+#startGame:hover{
+    background-color: blanchedalmond;
 }

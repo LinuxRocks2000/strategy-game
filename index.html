@@ -9,6 +9,32 @@
     <body>
         <h2>Strategy Game</h2>
         <canvas id="game" width="800" height="800"></canvas>
+        <div id="startGameScreen">
+            <div id="highscore">
+                <h2>High Score</h2>
+                581 (Set by Jakson)<br>
+                Beat this? Contact me and I'll change it.<br>
+                Can't contact me? Figure it out.
+            </div>
+            <div id="menu">
+                <h2>Game Settings</h2>
+                Battlefield Size: <select id="size">
+                    <option value="medium">Medium (800px)</option>
+                    <option value="small">Small (500px)</option>
+                    <option value="big">Big (1000px)</option>
+                    <option value="huge">Huge (1400px)</option>
+                    <option value="massive">Far too big (2000px)</option>
+                </select><br>
+                Starting Arrangement: <select id="formation">
+                    <option value="quad">Quad-Fighter Plus Sign</option>
+                    <option value="hex">Six-fighter Hex</option>
+                    <option value="qplust">Quad-Fighter + Tie Fighter</option>
+                    <option value="twof">Two-Fighter</option>
+                    <option value="tiefighter">Tie Fighter only</option>
+                </select><br>
+                <button id="startGame" onclick="startGame();">Start Game</button>
+            </div>
+        </div>
         <script src="main.js"></script>
     </body>
 </html>
