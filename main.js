@@ -1207,6 +1207,10 @@ function startGame() {
                     isStratChange = false;
                     countdown = 240;
                 }
+                selected = -1;
+                fighters.forEach(item => {
+                    item.selected = false;
+                });
             }
             if (evt.key == " ") {
                 toPlaceBlocks--;
@@ -1428,23 +1432,25 @@ function startGame() {
         });
 
         fighters.forEach((fighter, index) => {
-            if (index == selected) {
-                if (isAngleAdjust) {
-                    fighter.goalAngle = Math.atan((fighter.goalY - mousePos.gameY) / (fighter.goalX - mousePos.gameX));
-                    if (fighter.goalX >= mousePos.gameX) {
-                        fighter.goalAngle += Math.PI;
+            if (isStratChange) {
+                if (index == selected) {
+                    if (isAngleAdjust) {
+                        fighter.goalAngle = Math.atan((fighter.goalY - mousePos.gameY) / (fighter.goalX - mousePos.gameX));
+                        if (fighter.goalX >= mousePos.gameX) {
+                            fighter.goalAngle += Math.PI;
+                        }
+                        ctx.lineWidth = 10;
+                        ctx.strokeStyle = "red";
+                        ctx.beginPath();
+                        ctx.moveTo(fighter.goalX, fighter.goalY);
+                        ctx.lineTo(fighter.goalX + Math.cos(fighter.goalAngle) * 50, fighter.goalY + Math.sin(fighter.goalAngle) * 50);
+                        ctx.stroke();
                     }
-                    ctx.lineWidth = 10;
-                    ctx.strokeStyle = "red";
-                    ctx.beginPath();
-                    ctx.moveTo(fighter.goalX, fighter.goalY);
-                    ctx.lineTo(fighter.goalX + Math.cos(fighter.goalAngle) * 50, fighter.goalY + Math.sin(fighter.goalAngle) * 50);
-                    ctx.stroke();
-                }
-                else {
-                    fighter.selected = true;
-                    fighter.goalX = mousePos.gameX;
-                    fighter.goalY = mousePos.gameY;
+                    else {
+                        fighter.selected = true;
+                        fighter.goalX = mousePos.gameX;
+                        fighter.goalY = mousePos.gameY;
+                    }
                 }
             }
             fighter.draw();
