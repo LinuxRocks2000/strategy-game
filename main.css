@@ -34,6 +34,12 @@ body {
     background-color: white;
     box-shadow: 30px 30px 30px 10px black;
     margin: auto;
+    transition: box-shadow 0.5s, transform 0.5s;
+}
+
+#startGameScreen > *:hover {
+    box-shadow: 15px 15px 10px 0px black;
+    transform: translate(15px, 15px);
 }
 
 #menu {
