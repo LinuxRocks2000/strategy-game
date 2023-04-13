@@ -13,6 +13,7 @@
 #include <pthread.h>
 #include <vector>
 #include <mutex>
+#include <functional>
 #define PI 3.141592
 #define FPS 30
 const float ALLOWED_MICROS_PER_FRAME = 1000000.f/FPS;
@@ -20,7 +21,7 @@ char* code;
 
 unsigned int counter = 1;
 bool stratChangeMode = false;
-
+bool playing = false;
 unsigned long gameSize = 2000;
 std::string serverName = "StrategyGameMMO";
 
@@ -46,6 +47,21 @@ std::vector<std::string> splitString(std::string str, char delim){
 }
 
 
+struct Box {
+    double x1;
+    double y1;
+    double x2;
+    double y2;
+
+    bool check(Box other){
+        return (other.x1 < x2) && (other.x2 > x1) && (other.y1 < y2) && (other.y2 > y1);
+    }
+};
+
+
+struct Client;
+
+
 struct GameObject {
     static unsigned long topId;
 
@@ -57,24 +73,57 @@ struct GameObject {
     long goalX = 0;
     long goalY = 0;
     float goalAngle = 0;
+    bool rm = false;
+
+    Client* owner = NULL;
+    GameObject* killer = NULL;
+
+    std::function <void(GameObject*)> lostFunction;
+    bool hasLostCallback = false;
+
+    void setLostCallback(std::function<void(GameObject*)> function){
+        lostFunction = function;
+        hasLostCallback = true;
+    }
+
+    ~GameObject () {
+        broadcast((std::string)"d" + std::to_string(id));
+    }
 
     virtual void update() {
 
     }
 
+    virtual Box box () {
+        return { 0, 0, 0, 0 };
+    }
+
     virtual char identify() {
-        return 0;
+        return 'g';
     }
 
     virtual bool editable() { // All things have the same properties: position and rotation. Not one or the other, both or neither.
         return false;
     }
+
+    virtual void destroy() {
+        rm = true;
+        if (hasLostCallback){
+            lostFunction(this);
+        }
+    }
+
+    void shoot(float angle, float speed = 20, float dist = 20);
 };
 
 
 class CastleObject : public GameObject {
     void update() {
 
+    }
+
+    Box box(){
+        return { x - 25, y - 25, x + 25, y + 25 };
     }
 
     char identify(){
@@ -87,7 +136,14 @@ class BasicFighterObject : public GameObject {
     float xv = 0;
     float yv = 0;
 
+    int shootTimer = 20;
+
     void update() {
+        shootTimer --;
+        if (shootTimer < 0){
+            shootTimer = 30;
+            shoot(angle);
+        }
         double dx = goalX - x;
         double dy = goalY - y;
         if (((dx * dx) + (dy * dy)) > 10 * 10){
@@ -95,8 +151,8 @@ class BasicFighterObject : public GameObject {
             if (dx <= 0){
                 angle += PI;
             }
-            xv += cos(angle) * 0.1;
-            yv += sin(angle) * 0.1;
+            xv += cos(angle) * 0.25;
+            yv += sin(angle) * 0.25;
         }
         else {
             angle = goalAngle;
@@ -115,6 +171,57 @@ class BasicFighterObject : public GameObject {
     bool editable() {
         return true;
     }
+
+    Box box (){
+        return { x - 10, y - 10, x + 10, y + 10 };
+    }
+};
+
+
+class BulletObject : public GameObject {
+public:
+    float xv = 0;
+    float yv = 0;
+
+    int TTL = 80; // they last the same number of ticks, even if you speed up the framerate
+
+    char identify(){
+        return 'b';
+    }
+
+    void update() {
+        TTL --;
+        if (TTL < 0){
+            rm = true;
+        }
+        y += yv;
+        x += xv;
+        broadcast((std::string)"M" + std::to_string(id) + " " + std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(angle));
+    }
+
+    Box box () {
+        return { x - 5, y - 5, x + 5, y + 5 };
+    }
+};
+
+
+class WallObject : public GameObject {
+    char identify() {
+        return 'w';
+    }
+
+    int TTL = 100;
+
+    void update() {
+        TTL --;
+        if (TTL < 0){
+            rm = true;
+        }
+    }
+
+    Box box () {
+        return { x - 15, y - 15, x + 15, y + 15 };
+    }
 };
 
 
@@ -130,6 +237,12 @@ struct Client {
     bool hasPlacedCastle = false;
     CastleObject* deMoi = new CastleObject;
     std::vector <GameObject*> myFighters;
+    long score = 0;
+
+    void collect(int amount){
+        score += amount;
+        conn.send_text("S" + std::to_string(score));
+    }
 
     ~Client (){
         
@@ -139,7 +252,7 @@ struct Client {
         char command = message[0];
         std::vector<std::string> args = splitString(message.substr(1, message.size() - 1), ' ');
         if (command == 'c'){
-            if (args.size()){
+            if (args.size() && !playing){
                 if (args[0] == code){
                     std::cout << "got a valid client with code" << std::endl;
                     conn.send_text("s"); // SUCCESS
@@ -164,13 +277,18 @@ struct Client {
                         hasPlacedCastle = true;
                         deMoi -> x = std::stoi(args[1]);
                         deMoi -> y = std::stoi(args[2]);
-                        addObject(deMoi);
+                        add(deMoi);
                         fighters();
-                        conn.send_text("a" + std::to_string(deMoi -> id));
                     }
                     else{
                         std::cout << "Some idiot just tried to hack this system" << std::endl;
                     }
+                }
+                else if (args[0] == "w"){
+                    WallObject* w = new WallObject;
+                    w -> x = std::stoi(args[1]);
+                    w -> y = std::stoi(args[2]);
+                    add(w);
                 }
             }
             else if (command == 'm'){
@@ -203,8 +321,45 @@ struct Client {
         conn.send_text((std::string)"t" + std::to_string(counter) + " " + (mode ? "1" : "0"));
     }
 
+    void lostCallback(GameObject* thing){
+        switch (thing -> identify()){
+            case 'c':
+                if (thing -> killer != NULL && thing -> killer -> owner != NULL){
+                    if (thing -> killer -> owner != this){
+                        thing -> killer -> owner -> collect(50); // Enemy castles are worth 50 points
+                    }
+                }
+                conn.send_text((std::string)"l");
+                is_authorized = false;
+                break;
+            case 'f':
+                if (thing -> killer != NULL && thing -> killer -> owner != NULL){
+                    if (thing -> killer -> owner != this){
+                        thing -> killer -> owner -> collect(15); // You get 15 points for taking out an enemy fighter.
+                    }
+                }
+                break;
+            case 'w':
+                if (thing -> owner != NULL){
+                    thing -> owner -> collect(-2); // You lose 2 points for losing a wall - nobody gains anything, though
+                }
+                break;
+        }
+        size_t i;
+        for (i = 0; i < myFighters.size(); i ++){
+            if (myFighters[i] -> id == thing -> id){
+                break;
+            }
+        }
+        myFighters.erase(myFighters.begin() + i);
+    }
+
     void add(GameObject* thing){
         addObject(thing);
+        thing -> owner = this;
+        thing -> setLostCallback([this](GameObject* thing){
+            this -> lostCallback(thing);
+        });
         myFighters.push_back(thing);
         conn.send_text((std::string)"a" + std::to_string(thing -> id));
     }
@@ -243,8 +398,6 @@ long micros(){
     return time.tv_sec * 1000000 + time.tv_usec;
 }
 
-bool playing = false;
-
 void tick(){
     if (!playing){
         return;
@@ -260,12 +413,53 @@ void tick(){
         }
     }
     if (!stratChangeMode){
-        for (GameObject* obj : objects){
-            obj -> update();
+        for (size_t i = 0; i < objects.size(); i ++){
+            GameObject* obj = objects[i];
+            if (obj -> rm){
+                delete obj;
+                objects.erase(objects.begin() + i);
+            }
+            else{
+                obj -> update();
+            }
         }
     }
     for (Client* client : clients){
         client -> tick(counter, stratChangeMode);
+    }
+    for (size_t x = 0; x < objects.size() - 1; x ++){ // only go to the second-to-last, instead of the last, because the nested loop goes one above
+        for (size_t y = x + 1; y < objects.size(); y ++){ // prevent double-collisions by starting this at one more than the end of the set of known complete collisions
+            bool collided = false;
+            if (objects[x] -> box().check(objects[y] -> box())){
+                if (objects[x] -> identify() == 'c'){
+                    // If the collision root object is a castle
+                    if (objects[y] -> identify() == 'b') {
+                        collided = true;
+                    }
+                }
+                else if (objects[x] -> identify() == 'b'){
+                    // If the collision root object is a bullet
+                    // bullets collide with everything.
+                    collided = true;
+                }
+                else if (objects[x] -> identify() == 'w'){
+                    if (objects[y] -> identify() != 'c'){
+                        collided = true;
+                    }
+                }
+                else{ // If it's anything else, it's a fighter.
+                    if (objects[y] -> identify() != 'c'){
+                        collided = true;
+                    }
+                }
+            }
+            if (collided){
+                objects[y] -> killer = objects[x];
+                objects[x] -> killer = objects[y];
+                objects[y] -> destroy();
+                objects[x] -> destroy();
+            }
+        }
     }
 }
 
@@ -320,6 +514,17 @@ void broadcast(std::string broadcast) {
 }
 
 
+void GameObject::shoot(float angle, float speed, float dist){
+    BulletObject* bullet = new BulletObject;
+    bullet -> xv = cos(angle) * speed;
+    bullet -> yv = sin(angle) * speed;
+    bullet -> x = x + cos(angle) * dist;
+    bullet -> y = y + sin(angle) * dist;
+    bullet -> owner = owner;
+    addObject(bullet);
+}
+
+
 unsigned long GameObject::topId = 0;
 
 
@@ -339,7 +544,7 @@ int main(){
     pthread_create(&interaction, NULL, interactionThread, NULL);
     pthread_detach(interaction);
     crow::SimpleApp webserver;
-    //webserver.loglevel(crow::LogLevel::Warning);
+    webserver.loglevel(crow::LogLevel::Warning);
     CROW_ROUTE(webserver, "/")([](const crow::request& req, crow::response& res){
         res.set_static_file_info("index.html");
         res.end();

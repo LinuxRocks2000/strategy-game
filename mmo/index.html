@@ -58,6 +58,9 @@
             var hovered = undefined;
             var selected = undefined;
             var angleAdjustMode = false;
+            var score = 0;
+            var wallsRemaining = 4;
+            var wasPlayMode = false;
 
             var objects = {
 
@@ -71,6 +74,14 @@
 
             window.onkeyup = (evt) => {
                 keysDown[evt.key] = false;
+                if (evt.key == "w"){
+                    if (wallsRemaining > 0){
+                        if (playing && isStratChange){
+                            wallsRemaining --;
+                            connection.send("pw " + mousePos.gameX + " " + mousePos.gameY);
+                        }
+                    }
+                }
             };
 
             function setName(name){
@@ -129,9 +140,14 @@
                     counter = args[0] - 0;
                     if (args[1] == "1"){
                         isStratChange = true;
+                        if (wasPlayMode){
+                            wallsRemaining = 2;
+                        }
+                        wasPlayMode = false;
                     }
                     else{
                         isStratChange = false;
+                        wasPlayMode = true;
                     }
                 }
                 else if (command == "M"){
@@ -139,6 +155,17 @@
                     obj.x = args[1] - 0;
                     obj.y = args[2] - 0;
                     obj.angle = args[3] - 0;
+                }
+                else if (command == "d"){
+                    delete objects[args[0] - 0];
+                }
+                else if (command == "S"){
+                    score = args[0] - 0;
+                }
+                else if (command == "l"){
+                    playing = false;
+                    mine = [];
+                    alert("You lose! You can close the tab now, or continue as a spectator. If it makes you feel any better, the person responsible for your loss got 50 points!");
                 }
                 else {
                     console.warn("Got unrecognizable data: " + message.data);
@@ -223,6 +250,16 @@
                         ctx.stroke();
                         ctx.restore();
                     }
+                    else if (object.value == "b"){
+                        ctx.fillStyle = "green";
+                        ctx.beginPath();
+                        ctx.arc(object.x, object.y, 5, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    else if (object.value == "w"){
+                        ctx.fillStyle = "grey";
+                        ctx.fillRect(object.x - 15, object.y - 15, 30, 30);
+                    }
                     if (object.isEditable){
                         if (mousePos.gameX > object.x - 10 && mousePos.gameX < object.x + 10 && mousePos.gameY > object.y - 10 && mousePos.gameY < object.y + 10) {
                             if (mine.indexOf(object.id) != -1){
@@ -253,18 +290,23 @@
                         ctx.stroke();
                     }
                 });
-
-                if (selected) {
-                    if (angleAdjustMode){
-                        selected.goalPos.angle = Math.atan2(mousePos.gameY - selected.goalPos.y, mousePos.gameX - selected.goalPos.x);
+                if (isStratChange){
+                    if (selected) {
+                        if (angleAdjustMode) {
+                            selected.goalPos.angle = Math.atan2(mousePos.gameY - selected.goalPos.y, mousePos.gameX - selected.goalPos.x);
+                        }
+                        else {
+                            selected.goalPos.x = mousePos.gameX;
+                            selected.goalPos.y = mousePos.gameY;
+                        }
+                        connection.send("m" + selected.id + " " + selected.goalPos.x + " " + selected.goalPos.y + " " + selected.goalPos.angle);
                     }
-                    else{
-                        selected.goalPos.x = mousePos.gameX;
-                        selected.goalPos.y = mousePos.gameY;
-                    }
-                    connection.send("m" + selected.id + " " + selected.goalPos.x + " " + selected.goalPos.y + " " + selected.goalPos.angle);
                 }
-
+                else{
+                    selected = undefined;
+                    angleAdjustMode = false;
+                    hovered = undefined;
+                }
                 ctx.translate(cX, cY);
                 if (keysDown["ArrowUp"]){
                     yv -= 5;
@@ -314,7 +356,13 @@
                 ctx.font = "16px sans-serif";
                 ctx.fillStyle = "black";
                 ctx.textAlign = "left";
-                ctx.fillText(counter, 50, 50);
+                ctx.fillText(score, 50, 50);
+                ctx.fillStyle = "purple";
+                ctx.fillText("Time Left in " + (isStratChange ? "strategy mode" : "play mode") + ": " + counter, 50, 100);
+                if (wallsRemaining > 0){
+                    ctx.textAlign = "right";
+                    ctx.fillText("Remaining walls (press W to place one!): " + wallsRemaining, window.innerWidth - 50, 50);
+                }
                 requestAnimationFrame(mainloop);
             }
 
