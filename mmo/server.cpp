@@ -328,7 +328,7 @@ class WallObject : public GameObject {
         }
     }
 
-    int TTL = 100;
+    int TTL = 600;
 
     void update() {
         TTL --;
@@ -446,7 +446,7 @@ struct Client {
                         f -> goalX = f -> x;
                         f -> goalY = f -> y;
                         add(f);
-                        collect(-10);
+                        collect(-20);
                     }
                 }
                 else if (args[0] == "s"){
@@ -457,7 +457,7 @@ struct Client {
                         f -> goalX = f -> x;
                         f -> goalY = f -> y;
                         add(f);
-                        collect(-10);
+                        collect(-30);
                     }
                 }
             }
@@ -627,10 +627,10 @@ void tick(){
     if (counter == 0){
         stratChangeMode = !stratChangeMode;
         if (stratChangeMode){
-            counter = FPS * 20; // 20 seconds in strat change mode
+            counter = FPS * 30; // 20 seconds in strat change mode
         }
         else{
-            counter = FPS * 10; // For every 10 seconds of play. oooh this gon' be funnnnn
+            counter = FPS * 20; // For every 10 seconds of play. oooh this gon' be funnnnn
         }
     }
     if (!stratChangeMode){

@@ -118,6 +118,9 @@
                             inventoryMode = true;
                         }
                     }
+                    else{
+                        inventoryMode = false;
+                    }
                 }
                 else if (evt.key == "w"){
                     if (wallsRemaining > 0){
@@ -259,8 +262,6 @@
                     ctx.textAlign = "center";
                     ctx.font = "bold 40px monospace";
                     ctx.fillText("Inventory", window.innerWidth/2, 100);
-                    ctx.fillStyle = "black";
-                    ctx.font = "12px monospace";
                     var columnCount = Math.floor(window.innerWidth / 200);
                     for (var i = 0; i < inventoryStuff.length; i ++){
                         var x = i % columnCount;
@@ -268,6 +269,7 @@
                         x *= 200;
                         y *= 100;
                         ctx.fillStyle = "black";
+                        ctx.font = "12px monospace";
                         ctx.fillText(inventoryStuff[i].name, x + 100, y + 20);
                         ctx.fillText(inventoryStuff[i].cost, x + 100, y + 80);
                         if (score >= inventoryStuff[i].cost){
@@ -540,7 +542,7 @@
                 window.addEventListener("mouseup", (evt) => {
                     if (didSelectHome){
                         if (inventoryHovered != -1) {
-                            if (inventoryStuff[inventoryHovered.word]){
+                            if (inventoryStuff[inventoryHovered].word){
                                 connection.send("p" + inventoryStuff[inventoryHovered].word + " " + (myCastle.x + (Math.random() * 300 - 150)) + " " + (myCastle.y + (Math.random() * 300 - 150)));
                             }
                             else {
