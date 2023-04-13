@@ -115,7 +115,7 @@ struct GameObject {
         }
     }
 
-    void shoot(float angle, float speed = 20, float dist = 20);
+    void shoot(float angle, float speed = 20, float dist = 20, int duration = -1);
 };
 
 
@@ -191,6 +191,99 @@ class BasicFighterObject : public GameObject {
 };
 
 
+class TieFighterObject : public GameObject {
+    float xv = 0;
+    float yv = 0;
+
+    int shootTimer = 30;
+
+    void update() {
+        shootTimer --;
+        if (shootTimer < 0){
+            shootTimer = 40;
+            shoot(angle);
+            shoot(angle + PI);
+        }
+        double dx = goalX - x;
+        double dy = goalY - y;
+        if (((dx * dx) + (dy * dy)) > 10 * 10){
+            angle = atan(dy/dx);
+            if (dx <= 0){
+                angle += PI;
+            }
+            xv += cos(angle) * 0.35;
+            yv += sin(angle) * 0.35;
+        }
+        else {
+            angle = goalAngle;
+        }
+        x += xv;
+        y += yv;
+        xv *= 0.95;
+        yv *= 0.95;
+        broadcast((std::string)"M" + std::to_string(id) + " " + std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(angle));
+    }
+
+    char identify() {
+        return 't';
+    }
+
+    bool editable() {
+        return true;
+    }
+
+    Box box (){
+        return { x - 10, y - 10, x + 10, y + 10 };
+    }
+};
+
+
+class SniperObject : public GameObject {
+    float xv = 0;
+    float yv = 0;
+
+    int shootTimer = 60;
+
+    void update() {
+        shootTimer --;
+        if (shootTimer < 0){
+            shootTimer = 80; // They shoot far less often than the other guys
+            shoot(angle, 25, 20, 90); // 5 faster than regular bullets, and they last 3 times longer (they're snipers)
+        }
+        double dx = goalX - x;
+        double dy = goalY - y;
+        if (((dx * dx) + (dy * dy)) > 10 * 10){
+            angle = atan(dy/dx);
+            if (dx <= 0){
+                angle += PI;
+            }
+            xv += cos(angle) * 1.2;
+            yv += sin(angle) * 1.2;
+        }
+        else {
+            angle = goalAngle;
+        }
+        x += xv;
+        y += yv;
+        xv *= 0.9;
+        yv *= 0.9;
+        broadcast((std::string)"M" + std::to_string(id) + " " + std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(angle));
+    }
+
+    char identify() {
+        return 's';
+    }
+
+    bool editable() {
+        return true;
+    }
+
+    Box box (){
+        return { x - 10, y - 10, x + 10, y + 10 };
+    }
+};
+
+
 class BulletObject : public GameObject {
 public:
     float xv = 0;
@@ -219,8 +312,20 @@ public:
 
 
 class WallObject : public GameObject {
+    int lives = 2;
+    
     char identify() {
         return 'w';
+    }
+
+    void destroy(){
+        lives --;
+        if (lives <= 0){
+            rm = true;
+            if (hasLostCallback){
+                lostFunction(this);
+            }
+        }
     }
 
     int TTL = 100;
@@ -333,6 +438,28 @@ struct Client {
                         collect(-10);
                     }
                 }
+                else if (args[0] == "t"){
+                    if (score >= 20){
+                        TieFighterObject* f = new TieFighterObject;
+                        f -> x = std::stoi(args[1]);
+                        f -> y = std::stoi(args[2]);
+                        f -> goalX = f -> x;
+                        f -> goalY = f -> y;
+                        add(f);
+                        collect(-10);
+                    }
+                }
+                else if (args[0] == "s"){
+                    if (score >= 30){
+                        SniperObject* f = new SniperObject;
+                        f -> x = std::stoi(args[1]);
+                        f -> y = std::stoi(args[2]);
+                        f -> goalX = f -> x;
+                        f -> goalY = f -> y;
+                        add(f);
+                        collect(-10);
+                    }
+                }
             }
             else if (command == 'm'){
                 for (GameObject* obj : myFighters){
@@ -397,6 +524,20 @@ struct Client {
                         thing -> owner -> collect(-2); // You lose 2 points for losing a wall - nobody gains anything, though
                     }
                     break;
+                case 't':
+                    if (thing -> killer != NULL && thing -> killer -> owner != NULL){
+                        if (thing -> killer -> owner != this){
+                            thing -> killer -> owner -> collect(30); // You get 15 points for taking out an enemy tiefighter
+                        }
+                    }
+                    break;
+                case 's':
+                    if (thing -> killer != NULL && thing -> killer -> owner != NULL){
+                        if (thing -> killer -> owner != this){
+                            thing -> killer -> owner -> collect(45); // You get 45 points for taking out an enemy sniper
+                        }
+                    }
+                    break;
             }
         }
     }
@@ -411,8 +552,9 @@ struct Client {
         sendText((std::string)"a" + std::to_string(thing -> id));
     }
 
-    BasicFighterObject* newFighter(unsigned long x, unsigned long y, float angle){
-        BasicFighterObject* thing = new BasicFighterObject;
+    template <typename FighterType>
+    FighterType* newFighter(unsigned long x, unsigned long y, float angle){
+        FighterType* thing = new FighterType;
         thing -> x = x;
         thing -> y = y;
         thing -> goalX = x;
@@ -424,7 +566,15 @@ struct Client {
     }
 
     void newRelativeFighter(long relX, long relY, float angle = 0){
-        newFighter(deMoi -> x + relX, deMoi -> y + relY, angle);
+        newFighter<BasicFighterObject>(deMoi -> x + relX, deMoi -> y + relY, angle);
+    }
+
+    void newRelativeSniper(long relX, long relY, float angle = 0){
+        newFighter<SniperObject>(deMoi -> x + relX, deMoi -> y + relY, angle);
+    }
+
+    void newRelativeTiefighter(long relX, long relY, float angle = 0){
+        newFighter<TieFighterObject>(deMoi -> x + relX, deMoi -> y + relY, angle);
     }
 
     void fighters(){
@@ -432,6 +582,9 @@ struct Client {
         newRelativeFighter(-200, 0, PI);
         newRelativeFighter(0, 200);
         newRelativeFighter(0, -200);
+        newRelativeSniper(100, 0, PI/2);
+        newRelativeTiefighter(0, 100);
+        newRelativeTiefighter(0, -100, PI);
     }
 };
 
@@ -600,13 +753,16 @@ void broadcast(std::string broadcast) {
 }
 
 
-void GameObject::shoot(float angle, float speed, float dist){
+void GameObject::shoot(float angle, float speed, float dist, int duration){
     BulletObject* bullet = new BulletObject;
     bullet -> xv = cos(angle) * speed;
     bullet -> yv = sin(angle) * speed;
     bullet -> x = x + cos(angle) * dist;
     bullet -> y = y + sin(angle) * dist;
     bullet -> owner = owner;
+    if (duration != -1){
+        bullet -> TTL = duration;
+    }
     addObject(bullet);
 }
 

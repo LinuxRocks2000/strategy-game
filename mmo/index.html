@@ -70,12 +70,30 @@
             var canPlaceWall = false;
             var inventoryMode = false;
             var inventoryHovered = -1;
+            var wallsTurn = 2;
 
             var inventoryStuff = [
                 {
                     name: "Basic Fighter",
                     word: "f",
                     cost: 10
+                },
+                {
+                    name: "Tie Fighter",
+                    word: "t",
+                    cost: 20
+                },
+                {
+                    name: "Sniper",
+                    word: "s",
+                    cost: 30
+                },
+                {
+                    name: "Extra Walls",
+                    cbk: () => {
+                        wallsTurn += 2;
+                    },
+                    cost: 30
                 }
             ];
 
@@ -183,7 +201,7 @@
                     if (args[1] == "1"){
                         isStratChange = true;
                         if (wasPlayMode){
-                            wallsRemaining = 2;
+                            wallsRemaining = wallsTurn;
                         }
                         wasPlayMode = false;
                     }
@@ -249,6 +267,7 @@
                         var y = 2 + Math.floor(i / columnCount);
                         x *= 200;
                         y *= 100;
+                        ctx.fillStyle = "black";
                         ctx.fillText(inventoryStuff[i].name, x + 100, y + 20);
                         ctx.fillText(inventoryStuff[i].cost, x + 100, y + 80);
                         if (score >= inventoryStuff[i].cost){
@@ -331,6 +350,50 @@
                         ctx.lineTo(0, -10);
                         ctx.lineTo(0, 10);
                         ctx.closePath();
+                        ctx.stroke();
+                        ctx.restore();
+                    }
+                    else if (object.value == "t") {
+                        if (mine.indexOf(object.id) == -1) {
+                            ctx.fillStyle = "blue";
+                        }
+                        else {
+                            ctx.fillStyle = "#00AAFF";
+                        }
+                        ctx.save();
+                        ctx.translate(object.x, object.y);
+                        ctx.rotate(object.angle);
+                        ctx.fillRect(-60, -3, 70, 6);
+                        ctx.strokeStyle = ctx.fillStyle;
+                        ctx.lineWidth = 6;
+                        ctx.beginPath();
+                        ctx.moveTo(10, 0);
+                        ctx.lineTo(0, -10);
+                        ctx.lineTo(0, 10);
+                        ctx.closePath();
+                        ctx.stroke();
+                        ctx.fillStyle = "black";
+                        ctx.fillRect(-40, -10, 30, 2);
+                        ctx.fillRect(-40, 10, 30, 2);
+                        ctx.restore();
+                    }
+                    else if (object.value == "s") {
+                        if (mine.indexOf(object.id) == -1) {
+                            ctx.fillStyle = "black";
+                        }
+                        else {
+                            ctx.fillStyle = "#555555";
+                        }
+                        ctx.save();
+                        ctx.translate(object.x, object.y);
+                        ctx.rotate(object.angle);
+                        ctx.fillRect(-60, -1, 70, 2);
+                        ctx.strokeStyle = ctx.fillStyle;
+                        ctx.lineWidth = 4;
+                        ctx.beginPath();
+                        ctx.moveTo(0, -10);
+                        ctx.lineTo(10, 0);
+                        ctx.lineTo(0, 10);
                         ctx.stroke();
                         ctx.restore();
                     }
@@ -477,7 +540,12 @@
                 window.addEventListener("mouseup", (evt) => {
                     if (didSelectHome){
                         if (inventoryHovered != -1) {
-                            connection.send("p" + inventoryStuff[inventoryHovered].word + " " + (myCastle.x + (Math.random() * 300 - 150)) + " " + (myCastle.y + (Math.random() * 300 - 150)));
+                            if (inventoryStuff[inventoryHovered.word]){
+                                connection.send("p" + inventoryStuff[inventoryHovered].word + " " + (myCastle.x + (Math.random() * 300 - 150)) + " " + (myCastle.y + (Math.random() * 300 - 150)));
+                            }
+                            else {
+                                inventoryStuff[inventoryHovered].cbk();
+                            }
                             inventoryMode = false;
                         }
                         else if (isStratChange){
