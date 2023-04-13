@@ -44,7 +44,12 @@
         <script>
             var canvas = document.getElementById("game");
             var ctx = canvas.getContext("2d");
-            var connection = new WebSocket("ws://" + location.host + "/game");
+            var connection = new WebSocket("wss://" + location.host + "/awesome/game");
+            connection.onopen = () => {
+                setInterval(() => {
+                    connection.send("_");
+                }, 100);
+            };
             var playing = false;
             var cX = 0;
             var cY = 0;
@@ -61,6 +66,18 @@
             var score = 0;
             var wallsRemaining = 4;
             var wasPlayMode = false;
+            var myCastle = undefined;
+            var canPlaceWall = false;
+            var inventoryMode = false;
+            var inventoryHovered = -1;
+
+            var inventoryStuff = [
+                {
+                    name: "Basic Fighter",
+                    word: "f",
+                    cost: 10
+                }
+            ];
 
             var objects = {
 
@@ -74,11 +91,23 @@
 
             window.onkeyup = (evt) => {
                 keysDown[evt.key] = false;
-                if (evt.key == "w"){
+                if (evt.key == "i") {
+                    if (isStratChange && playing && didSelectHome){
+                        if (inventoryMode){
+                            inventoryMode = false;
+                        }
+                        else{
+                            inventoryMode = true;
+                        }
+                    }
+                }
+                else if (evt.key == "w"){
                     if (wallsRemaining > 0){
                         if (playing && isStratChange){
-                            wallsRemaining --;
-                            connection.send("pw " + mousePos.gameX + " " + mousePos.gameY);
+                            if (canPlaceWall){
+                                wallsRemaining --;
+                                connection.send("pw " + mousePos.gameX + " " + mousePos.gameY);
+                            }
                         }
                     }
                 }
@@ -108,6 +137,15 @@
                         console.error("Got ERROR " + args[0]);
                     }
                 }
+                else if (command == "T"){
+                    alert("Game over! It was a tie - nobody was left alive at the end. Pretty L, in my opinion.");
+                }
+                else if (command == "W"){
+                    alert("You won! Your final score: " + score);
+                }
+                else if (command == "E"){
+                    alert("Game over! Somebody else won. There's no way for you to know who, at the moment.");
+                }
                 else if (command == "w"){
                     console.warn("Got warning " + args[0]);
                     if (mode == 1){
@@ -134,6 +172,10 @@
                     };
                 }
                 else if (command == "a"){
+                    console.log(args);
+                    if (objects[args[0] - 0].value == "c"){
+                        myCastle = objects[args[0] - 0];
+                    }
                     mine.push(args[0] - 0);
                 }
                 else if (command == "t"){
@@ -190,6 +232,50 @@
             });
 
             function mainloop(){
+                requestAnimationFrame(mainloop);
+                ctx.fillStyle = "white";
+                ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+                inventoryHovered = -1;
+                if (inventoryMode) {
+                    ctx.fillStyle = "red";
+                    ctx.textAlign = "center";
+                    ctx.font = "bold 40px monospace";
+                    ctx.fillText("Inventory", window.innerWidth/2, 100);
+                    ctx.fillStyle = "black";
+                    ctx.font = "12px monospace";
+                    var columnCount = Math.floor(window.innerWidth / 200);
+                    for (var i = 0; i < inventoryStuff.length; i ++){
+                        var x = i % columnCount;
+                        var y = 2 + Math.floor(i / columnCount);
+                        x *= 200;
+                        y *= 100;
+                        ctx.fillText(inventoryStuff[i].name, x + 100, y + 20);
+                        ctx.fillText(inventoryStuff[i].cost, x + 100, y + 80);
+                        if (score >= inventoryStuff[i].cost){
+                            ctx.fillStyle = "green";
+                            ctx.font = "bold 12px sans-serif";
+                            ctx.fillText("[ CLICK TO BUY ]", x + 100, y + 50);
+                        }
+                        else {
+                            ctx.fillStyle = "red";
+                            ctx.font = "bold 12px sans-serif";
+                            ctx.fillText("[ INSUFFICIENT SCORE ]", x + 100, y + 50);
+                        }
+                        if ((mousePos.realX > x) && (mousePos.realX < x + 200) && (mousePos.realY > y) && (mousePos.realY < y + 100)) {
+                            inventoryHovered = i;
+                            ctx.strokeStyle = "yellow";
+                            ctx.lineWidth = 5;
+                            ctx.strokeRect(x, y, 200, 100);
+                        }
+                    }
+                    return;
+                }
+                if (myCastle) {
+                    canPlaceWall = (Math.abs(mousePos.gameX - myCastle.x) < 400) && (Math.abs(mousePos.gameY - myCastle.y) < 400);
+                }
+                else {
+                    canPlaceWall = false;
+                }
                 mousePos.gameX = mousePos.realX + cX;
                 mousePos.gameY = mousePos.realY + cY;
                 if (mousePos.gameX > gameSize) {
@@ -205,8 +291,6 @@
                 else if (mousePos.gameY < 0) {
                     mousePos.gameY = 0;
                 }
-                ctx.fillStyle = "white";
-                ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
                 ctx.translate(-cX, -cY);
 
                 ctx.strokeStyle = "black";
@@ -307,6 +391,24 @@
                     angleAdjustMode = false;
                     hovered = undefined;
                 }
+                if (keysDown["c"] && myCastle) {
+                    ctx.fillStyle = "white";
+                    ctx.strokeStyle = "blue";
+                    ctx.lineWidth = 10;
+                    ctx.beginPath();
+                    ctx.arc(mousePos.gameX, mousePos.gameY, 100, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(mousePos.gameX, mousePos.gameY);
+                    var dX = mousePos.gameX - myCastle.x;
+                    var dY = mousePos.gameY - myCastle.y;
+                    var distance = Math.sqrt(dX * dX + dY * dY);
+                    dX /= distance;
+                    dY /= distance;
+                    ctx.strokeStyle = "red";
+                    ctx.lineTo(mousePos.gameX + -dX * 150, mousePos.gameY + -dY * 150);
+                    ctx.stroke();
+                }
                 ctx.translate(cX, cY);
                 if (keysDown["ArrowUp"]){
                     yv -= 5;
@@ -361,9 +463,11 @@
                 ctx.fillText("Time Left in " + (isStratChange ? "strategy mode" : "play mode") + ": " + counter, 50, 100);
                 if (wallsRemaining > 0){
                     ctx.textAlign = "right";
-                    ctx.fillText("Remaining walls (press W to place one!): " + wallsRemaining, window.innerWidth - 50, 50);
+                    if (!canPlaceWall){
+                        ctx.fillStyle = "red";
+                    }
+                    ctx.fillText("Remaining walls (" + (canPlaceWall ? "press W to place one!" : "can't place here!") + "): " + wallsRemaining, window.innerWidth - 50, 50);
                 }
-                requestAnimationFrame(mainloop);
             }
 
             function play() {
@@ -372,7 +476,11 @@
 
                 window.addEventListener("mouseup", (evt) => {
                     if (didSelectHome){
-                        if (isStratChange){
+                        if (inventoryHovered != -1) {
+                            connection.send("p" + inventoryStuff[inventoryHovered].word + " " + (myCastle.x + (Math.random() * 300 - 150)) + " " + (myCastle.y + (Math.random() * 300 - 150)));
+                            inventoryMode = false;
+                        }
+                        else if (isStratChange){
                             if (angleAdjustMode) {
                                 angleAdjustMode = false;
                                 selected = undefined;

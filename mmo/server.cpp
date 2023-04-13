@@ -20,9 +20,11 @@ const float ALLOWED_MICROS_PER_FRAME = 1000000.f/FPS;
 char* code;
 
 unsigned int counter = 1;
+unsigned int livePlayerCount = 0;
 bool stratChangeMode = false;
 bool playing = false;
-unsigned long gameSize = 2000;
+unsigned long gameSize = 5000;
+long millisPerTick = 0;
 std::string serverName = "StrategyGameMMO";
 
 void broadcast(std::string broadcast);
@@ -118,8 +120,19 @@ struct GameObject {
 
 
 class CastleObject : public GameObject {
+    int lives = 3;
     void update() {
 
+    }
+
+    void destroy () {
+        lives --;
+        if (lives <= 0){
+            rm = true;
+            if (hasLostCallback){
+                lostFunction(this);
+            }
+        }
     }
 
     Box box(){
@@ -183,7 +196,7 @@ public:
     float xv = 0;
     float yv = 0;
 
-    int TTL = 80; // they last the same number of ticks, even if you speed up the framerate
+    int TTL = 30; // they last the same number of ticks, even if you speed up the framerate
 
     char identify(){
         return 'b';
@@ -233,6 +246,8 @@ std::vector <GameObject*> objects;
 
 struct Client {
     crow::websocket::connection& conn;
+    std::mutex sendMutex;
+    std::mutex processingMutex; // For generic INTERNAL tasks
     bool is_authorized = false;
     bool hasPlacedCastle = false;
     CastleObject* deMoi = new CastleObject;
@@ -241,32 +256,45 @@ struct Client {
 
     void collect(int amount){
         score += amount;
-        conn.send_text("S" + std::to_string(score));
+        sendText("S" + std::to_string(score));
     }
 
     ~Client (){
-        
+        if (is_authorized){
+            livePlayerCount --;
+        }
     }
 
-    void process(std::string message){
+    void sendText(std::string text){
+        sendMutex.lock();
+        conn.send_text(text);
+        sendMutex.unlock();
+    }
+
+    void process(std::string message){ // INSIDE A CROW THREAD
+        if (message == "_"){ // Heartbeat message
+            return;
+        }
         char command = message[0];
         std::vector<std::string> args = splitString(message.substr(1, message.size() - 1), ' ');
+        processingMutex.lock();
         if (command == 'c'){
             if (args.size() && !playing){
                 if (args[0] == code){
-                    std::cout << "got a valid client with code" << std::endl;
-                    conn.send_text("s"); // SUCCESS
+                    std::cout << "New player logged in with access code!" << std::endl;
+                    sendText("s"); // SUCCESS
                     metadata();
                     is_authorized = true;
+                    livePlayerCount ++;
                 }
                 else{
-                    std::cout << "got an invalid client with code" << std::endl;
-                    conn.send_text("e0"); // ERROR 0 invalid code
+                    std::cout << "Player failed to log in - has the wrong code?" << std::endl;
+                    sendText("e0"); // ERROR 0 invalid code
                 }
             }
             else{
-                std::cout << "got a spectator" << std::endl;
-                conn.send_text("w0"); // WARNING 0 you are a spectator
+                std::cout << "A spectator entered the arena!" << std::endl;
+                sendText("w0"); // WARNING 0 you are a spectator
                 metadata();
             }
         }
@@ -290,6 +318,17 @@ struct Client {
                     w -> y = std::stoi(args[2]);
                     add(w);
                 }
+                else if (args[0] == "f"){
+                    if (score >= 10){
+                        BasicFighterObject* f = new BasicFighterObject;
+                        f -> x = std::stoi(args[1]);
+                        f -> y = std::stoi(args[2]);
+                        f -> goalX = f -> x;
+                        f -> goalY = f -> y;
+                        add(f);
+                        collect(-10);
+                    }
+                }
             }
             else if (command == 'm'){
                 for (GameObject* obj : myFighters){
@@ -302,56 +341,60 @@ struct Client {
             }
         }
         else{
-            conn.send_text("e1"); // ERROR 1 premature command
+            sendText("e1"); // ERROR 1 premature command
         }
+        processingMutex.unlock();
     }
 
     void metadata(){
-        conn.send_text("m" + std::to_string(gameSize) + " " + serverName);
+        sendText("m" + std::to_string(gameSize) + " " + serverName);
         for (GameObject* obj : objects){
             sendObject(obj);
         }
     }
 
     void sendObject(GameObject* obj){
-        conn.send_text((std::string)"n" + obj -> identify() + " " + std::to_string(obj -> id) + " " + std::to_string(obj -> x) + " " + std::to_string(obj -> y) + " " + std::to_string(obj -> angle) + " " + (obj -> editable() ? "1" : "0"));
+        sendText((std::string)"n" + obj -> identify() + " " + std::to_string(obj -> id) + " " + std::to_string(obj -> x) + " " + std::to_string(obj -> y) + " " + std::to_string(obj -> angle) + " " + (obj -> editable() ? "1" : "0"));
     }
 
     void tick(unsigned int counter, bool mode){
-        conn.send_text((std::string)"t" + std::to_string(counter) + " " + (mode ? "1" : "0"));
+        sendText((std::string)"t" + std::to_string(counter) + " " + (mode ? "1" : "0"));
     }
 
     void lostCallback(GameObject* thing){
-        switch (thing -> identify()){
-            case 'c':
-                if (thing -> killer != NULL && thing -> killer -> owner != NULL){
-                    if (thing -> killer -> owner != this){
-                        thing -> killer -> owner -> collect(50); // Enemy castles are worth 50 points
-                    }
-                }
-                conn.send_text((std::string)"l");
-                is_authorized = false;
-                break;
-            case 'f':
-                if (thing -> killer != NULL && thing -> killer -> owner != NULL){
-                    if (thing -> killer -> owner != this){
-                        thing -> killer -> owner -> collect(15); // You get 15 points for taking out an enemy fighter.
-                    }
-                }
-                break;
-            case 'w':
-                if (thing -> owner != NULL){
-                    thing -> owner -> collect(-2); // You lose 2 points for losing a wall - nobody gains anything, though
-                }
-                break;
-        }
-        size_t i;
-        for (i = 0; i < myFighters.size(); i ++){
+        long res = -1;
+        for (size_t i = 0; i < myFighters.size(); i ++){
             if (myFighters[i] -> id == thing -> id){
-                break;
+                res = i;
             }
         }
-        myFighters.erase(myFighters.begin() + i);
+        if (res >= 0){
+            myFighters.erase(myFighters.begin() + res);
+            switch (thing -> identify()){
+                case 'c':
+                    if (thing -> killer != NULL && thing -> killer -> owner != NULL){
+                        if (thing -> killer -> owner != this){
+                            thing -> killer -> owner -> collect(50); // Enemy castles are worth 50 points
+                        }
+                    }
+                    sendText((std::string)"l");
+                    is_authorized = false;
+                    livePlayerCount --;
+                    break;
+                case 'f':
+                    if (thing -> killer != NULL && thing -> killer -> owner != NULL){
+                        if (thing -> killer -> owner != this){
+                            thing -> killer -> owner -> collect(15); // You get 15 points for taking out an enemy fighter.
+                        }
+                    }
+                    break;
+                case 'w':
+                    if (thing -> owner != NULL){
+                        thing -> owner -> collect(-2); // You lose 2 points for losing a wall - nobody gains anything, though
+                    }
+                    break;
+            }
+        }
     }
 
     void add(GameObject* thing){
@@ -361,26 +404,28 @@ struct Client {
             this -> lostCallback(thing);
         });
         myFighters.push_back(thing);
-        conn.send_text((std::string)"a" + std::to_string(thing -> id));
+        sendText((std::string)"a" + std::to_string(thing -> id));
     }
 
-    BasicFighterObject* newFighter(unsigned long x, unsigned long y){
+    BasicFighterObject* newFighter(unsigned long x, unsigned long y, float angle){
         BasicFighterObject* thing = new BasicFighterObject;
         thing -> x = x;
         thing -> y = y;
         thing -> goalX = x;
         thing -> goalY = y;
+        thing -> angle = angle;
+        thing -> goalAngle = angle;
         add(thing);
         return thing;
     }
 
-    void newRelativeFighter(long relX, long relY){
-        newFighter(deMoi -> x + relX, deMoi -> y + relY);
+    void newRelativeFighter(long relX, long relY, float angle = 0){
+        newFighter(deMoi -> x + relX, deMoi -> y + relY, angle);
     }
 
     void fighters(){
         newRelativeFighter(200, 0);
-        newRelativeFighter(-200, 0);
+        newRelativeFighter(-200, 0, PI);
         newRelativeFighter(0, 200);
         newRelativeFighter(0, -200);
     }
@@ -402,6 +447,25 @@ void tick(){
     if (!playing){
         return;
     }
+    if (livePlayerCount == 1){
+        for (Client* cli : clients){
+            if (cli -> is_authorized){
+                cli -> sendText("W"); // You won the game!
+            }
+            else{
+                cli -> sendText("E"); // The game has ended.
+            }
+        }
+        std::cout << "\033[32mThe game ended with a winner!\033[0m" << std::endl;
+        exit(0);
+    }
+    else if (livePlayerCount == 0){
+        for (Client* cli : clients){
+            cli -> sendText("T"); // The game was a tie.
+        }
+        std::cout << "\033[33mThe game ended with a tie.\033[0m" << std::endl;
+        exit(0);
+    }
     counter --;
     if (counter == 0){
         stratChangeMode = !stratChangeMode;
@@ -416,60 +480,78 @@ void tick(){
         for (size_t i = 0; i < objects.size(); i ++){
             GameObject* obj = objects[i];
             if (obj -> rm){
+                clientListMutex.lock();
                 delete obj;
                 objects.erase(objects.begin() + i);
+                clientListMutex.unlock();
             }
             else{
                 obj -> update();
+            }
+        }
+        for (size_t x = 0; x < objects.size() - 1; x ++){ // only go to the second-to-last, instead of the last, because the nested loop goes one above
+            for (size_t y = x + 1; y < objects.size(); y ++){ // prevent double-collisions by starting this at one more than the end of the set of known complete collisions
+                bool collided = false;
+                if (objects[x] -> box().check(objects[y] -> box())){
+                    if (objects[x] -> identify() == 'c'){
+                        // If the collision root object is a castle
+                        if (objects[y] -> identify() == 'b') {
+                            collided = true;
+                        }
+                    }
+                    else if (objects[x] -> identify() == 'b'){
+                        // If the collision root object is a bullet
+                        // bullets collide with everything.
+                        collided = true;
+                    }
+                    else if (objects[x] -> identify() == 'w'){
+                        if (objects[y] -> identify() != 'c'){
+                            collided = true;
+                        }
+                    }
+                    else{ // If it's anything else, it's a fighter.
+                        if (objects[y] -> identify() != 'c'){
+                            collided = true;
+                        }
+                    }
+                }
+                if (collided){
+                    objects[y] -> killer = objects[x];
+                    objects[x] -> killer = objects[y];
+                    objects[y] -> destroy();
+                    objects[x] -> destroy();
+                }
             }
         }
     }
     for (Client* client : clients){
         client -> tick(counter, stratChangeMode);
     }
-    for (size_t x = 0; x < objects.size() - 1; x ++){ // only go to the second-to-last, instead of the last, because the nested loop goes one above
-        for (size_t y = x + 1; y < objects.size(); y ++){ // prevent double-collisions by starting this at one more than the end of the set of known complete collisions
-            bool collided = false;
-            if (objects[x] -> box().check(objects[y] -> box())){
-                if (objects[x] -> identify() == 'c'){
-                    // If the collision root object is a castle
-                    if (objects[y] -> identify() == 'b') {
-                        collided = true;
-                    }
-                }
-                else if (objects[x] -> identify() == 'b'){
-                    // If the collision root object is a bullet
-                    // bullets collide with everything.
-                    collided = true;
-                }
-                else if (objects[x] -> identify() == 'w'){
-                    if (objects[y] -> identify() != 'c'){
-                        collided = true;
-                    }
-                }
-                else{ // If it's anything else, it's a fighter.
-                    if (objects[y] -> identify() != 'c'){
-                        collided = true;
-                    }
-                }
-            }
-            if (collided){
-                objects[y] -> killer = objects[x];
-                objects[x] -> killer = objects[y];
-                objects[y] -> destroy();
-                objects[x] -> destroy();
-            }
-        }
-    }
 }
+
+bool isPasswordChange = false;
 
 void* interactionThread(void* _){
     while (true){
         std::string command;
         std::getline(std::cin, command);
-        if (command == "start"){
+        if (isPasswordChange){
+            free(code);
+            code = (char*)malloc(command.size() + 1);
+            for (size_t i = 0; i < command.size(); i ++){
+                code[i] = command[i];
+            }
+            code[command.size()] = 0;
+            std::cout << "Password changed to " << code << std::endl;
+            isPasswordChange = false;
+        }
+        else if (command == "start"){
             std::cout << "Starting game." << std::endl;
             playing = true;
+        }
+        else if (command == "change password"){
+            isPasswordChange = true;
+            std::cout << "\033[4mEnter the new passcode\033[0m" << std::endl;
         }
     }
 }
@@ -509,7 +591,7 @@ void addObject(GameObject* obj){
 
 void broadcast(std::string broadcast) {
     for (Client* cli : clients){
-        cli -> conn.send_text(broadcast);
+        cli -> sendText(broadcast);
     }
 }
 
@@ -537,6 +619,7 @@ int main(){
     std::cout << "│      By Tyler Clarke      │" << std::endl;
     std::cout << "└───────────────────────────┘" << std::endl;
     code = randCode<16>();
+    std::cout << "Type 'start' and press enter to begin the game." << std::endl;
     std::cout << "\033[32mSharing code: " << code << "\033[0m" << std::endl;
     pthread_t thread, interaction;
     pthread_create(&thread, NULL, mainthread, NULL);
@@ -571,6 +654,6 @@ int main(){
         }
         clientListMutex.unlock();
     });
-    webserver.port(9160).multithreaded().run();
+    webserver.port(3000).multithreaded().run();
     return 0;
 }
