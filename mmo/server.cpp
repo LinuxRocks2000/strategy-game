@@ -260,6 +260,10 @@ struct Client {
     }
 
     ~Client (){
+        for (GameObject* obj : myFighters){
+            obj -> owner = NULL;
+            obj -> hasLostCallback = false;
+        }
         if (is_authorized){
             livePlayerCount --;
         }
