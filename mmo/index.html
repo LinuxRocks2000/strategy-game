@@ -1,0 +1,361 @@
+<!-- Oh, how I hate single file websites... Eh. This is the easiest way to handle the site. -->
+
+<!DOCTYPE html>
+
+
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Strategy MMO</title>
+        <style>
+            body{
+                margin: 0px;
+                padding: 0px;
+                overflow: hidden;
+            }
+            #mainscreen {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                text-align: center;
+            }
+            #start {
+                border: none;
+                padding: 20px;
+            }
+            #game{
+                width: 100vw;
+                height: 100vh;
+                position: absolute;
+                top: 0px;
+                left: 0px;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="mainscreen">
+            Entry code (leave blank for spectator mode)<input type="text" id="code" /><br/>
+            <button id="start" onclick="start();">Start</button>
+        </div>
+        <canvas id="game" style="display: none;">
+
+        </canvas>
+        <script>
+            var canvas = document.getElementById("game");
+            var ctx = canvas.getContext("2d");
+            var connection = new WebSocket("ws://" + location.host + "/game");
+            var playing = false;
+            var cX = 0;
+            var cY = 0;
+            var xv = 0;
+            var yv = 0;
+            var gameSize = 0;
+            var keysDown = {};
+            var didSelectHome = false;
+            var isStratChange = false;
+            var counter = 0;
+            var hovered = undefined;
+            var selected = undefined;
+            var angleAdjustMode = false;
+
+            var objects = {
+
+            };
+
+            var mine = [];
+
+            window.onkeydown = (evt) => {
+                keysDown[evt.key] = true;
+            };
+
+            window.onkeyup = (evt) => {
+                keysDown[evt.key] = false;
+            };
+
+            function setName(name){
+                document.title = name;
+            }
+
+            connection.onmessage = (message) => {
+                var data = message.data;
+                var command = data[0];
+                var args = data.substring(1, data.length).split(" ");
+                if (command == "s"){
+                    console.log("an event was successful");
+                    if (mode == 1){
+                        playing = true;
+                        play();
+                    }
+                }
+                else if (command == "e"){
+                    if (mode == 1 && args[0] == 0){
+                        alert("Wrong code!");
+                        window.location.reload();
+                    }
+                    else{
+                        console.error("Got ERROR " + args[0]);
+                    }
+                }
+                else if (command == "w"){
+                    console.warn("Got warning " + args[0]);
+                    if (mode == 1){
+                        play();
+                    }
+                }
+                else if (command == "m"){
+                    gameSize = args[0] - 0;
+                    setName(args[1]);
+                }
+                else if (command == "n"){
+                    objects[args[1] - 0] = {
+                        value: args[0],
+                        id: args[1] - 0,
+                        x: args[2] - 0,
+                        y: args[3] - 0,
+                        angle: args[4] - 0,
+                        isEditable: args[5] == "1",
+                        goalPos: {
+                            x: args[2] - 0,
+                            y: args[3] - 0,
+                            angle: args[4] - 0
+                        }
+                    };
+                }
+                else if (command == "a"){
+                    mine.push(args[0] - 0);
+                }
+                else if (command == "t"){
+                    counter = args[0] - 0;
+                    if (args[1] == "1"){
+                        isStratChange = true;
+                    }
+                    else{
+                        isStratChange = false;
+                    }
+                }
+                else if (command == "M"){
+                    var obj = objects[args[0] - 0];
+                    obj.x = args[1] - 0;
+                    obj.y = args[2] - 0;
+                    obj.angle = args[3] - 0;
+                }
+                else {
+                    console.warn("Got unrecognizable data: " + message.data);
+                }
+            };
+            var mode = 0;
+            function start(){
+                connection.send("c" + document.getElementById("code").value);
+                mode = 1; // waiting for a response
+            }
+
+            var mousePos = {
+                gameX: 0,
+                gameY: 0,
+                realX: 0,
+                realY: 0
+            };
+
+            window.addEventListener("mousemove", (evt) => {
+                mousePos.realX = evt.clientX;
+                mousePos.realY = evt.clientY;
+            });
+
+            function mainloop(){
+                mousePos.gameX = mousePos.realX + cX;
+                mousePos.gameY = mousePos.realY + cY;
+                if (mousePos.gameX > gameSize) {
+                    mousePos.gameX = gameSize;
+                }
+                else if (mousePos.gameX < 0) {
+                    mousePos.gameX = 0;
+                }
+
+                if (mousePos.gameY > gameSize) {
+                    mousePos.gameY = gameSize;
+                }
+                else if (mousePos.gameY < 0) {
+                    mousePos.gameY = 0;
+                }
+                ctx.fillStyle = "white";
+                ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+                ctx.translate(-cX, -cY);
+
+                ctx.strokeStyle = "black";
+                ctx.fillStyle = "lightblue";
+                ctx.lineWidth = 10;
+                ctx.strokeRect(0, 0, gameSize, gameSize);
+                ctx.fillRect(0, 0, gameSize, gameSize);
+                ctx.fillStyle = "black";
+                ctx.fillRect(mousePos.gameX - 5, mousePos.gameY - 5, 10, 10);
+
+                hovered = undefined;
+                Object.keys(objects).forEach(id => {
+                    var object = objects[id];
+                    if (object.value == "c"){
+                        if (mine.indexOf(object.id) == -1){
+                            ctx.fillStyle = "green";
+                        }
+                        else{
+                            ctx.fillStyle = "lightgreen";
+                        }
+                        ctx.fillRect(object.x - 25, object.y - 25, 50, 50);
+                    }
+                    else if (object.value == "f"){
+                        if (mine.indexOf(object.id) == -1){
+                            ctx.fillStyle = "purple";
+                        }
+                        else {
+                            ctx.fillStyle = "#FFAAFF";
+                        }
+                        ctx.save();
+                        ctx.translate(object.x, object.y);
+                        ctx.rotate(object.angle);
+                        ctx.fillRect(-60, -3, 70, 6);
+                        ctx.strokeStyle = ctx.fillStyle;
+                        ctx.lineWidth = 6;
+                        ctx.beginPath();
+                        ctx.moveTo(10, 0);
+                        ctx.lineTo(0, -10);
+                        ctx.lineTo(0, 10);
+                        ctx.closePath();
+                        ctx.stroke();
+                        ctx.restore();
+                    }
+                    if (object.isEditable){
+                        if (mousePos.gameX > object.x - 10 && mousePos.gameX < object.x + 10 && mousePos.gameY > object.y - 10 && mousePos.gameY < object.y + 10) {
+                            if (mine.indexOf(object.id) != -1){
+                                object.hovered = true;
+                                ctx.strokeStyle = "yellow";
+                                ctx.lineWidth = 3;
+                                ctx.strokeRect(object.x - 10, object.y - 10, 20, 20);
+                                hovered = object;
+                            }
+                        }
+                    }
+                    if (object.isEditable && mine.indexOf(object.id) != -1){
+                        ctx.lineWidth = 1;
+                        ctx.strokeStyle = "black";
+                        ctx.beginPath();
+                        ctx.moveTo(object.x, object.y);
+                        ctx.lineTo(object.goalPos.x, object.goalPos.y);
+                        ctx.stroke();
+                        ctx.fillStyle = "red";
+                        ctx.beginPath();
+                        ctx.arc(object.goalPos.x, object.goalPos.y, 5, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.lineWidth = 3;
+                        ctx.strokeStyle = "blue";
+                        ctx.beginPath();
+                        ctx.moveTo(object.goalPos.x, object.goalPos.y);
+                        ctx.lineTo(object.goalPos.x + Math.cos(object.goalPos.angle) * 20, object.goalPos.y + Math.sin(object.goalPos.angle) * 20);
+                        ctx.stroke();
+                    }
+                });
+
+                if (selected) {
+                    if (angleAdjustMode){
+                        selected.goalPos.angle = Math.atan2(mousePos.gameY - selected.goalPos.y, mousePos.gameX - selected.goalPos.x);
+                    }
+                    else{
+                        selected.goalPos.x = mousePos.gameX;
+                        selected.goalPos.y = mousePos.gameY;
+                    }
+                    connection.send("m" + selected.id + " " + selected.goalPos.x + " " + selected.goalPos.y + " " + selected.goalPos.angle);
+                }
+
+                ctx.translate(cX, cY);
+                if (keysDown["ArrowUp"]){
+                    yv -= 5;
+                }
+                if (keysDown["ArrowDown"]){
+                    yv += 5;
+                }
+                if (keysDown["ArrowLeft"]){
+                    xv -= 5;
+                }
+                if (keysDown["ArrowRight"]){
+                    xv += 5;
+                }
+                yv *= 0.8;
+                xv *= 0.8;
+                cY += yv;
+                cX += xv;
+                if (cX < -window.innerWidth/2){
+                    cX = -window.innerWidth/2;
+                }
+                if (cX > gameSize - window.innerWidth/2){
+                    cX = gameSize - window.innerWidth/2;
+                }
+                if (cY < -window.innerHeight/2){
+                    cY = -window.innerHeight/2;
+                }
+                if (cY > gameSize - window.innerHeight/2){
+                    cY = gameSize - window.innerHeight/2;
+                }
+                if (playing){
+                    ctx.fillStyle = "red";
+                    ctx.textAlign = "center";
+                    ctx.font = "bold 40px monospace";
+                    if (didSelectHome){
+                        if (counter == 0){
+                            ctx.fillText("Waiting for game start...", window.innerWidth/2, 100);
+                        }
+                        else if (isStratChange){
+                            ctx.fillText("Move your ships!", window.innerWidth/2, 100);
+                            // Ship movement goes here.
+                        }
+                    }
+                    else{
+                        ctx.fillText("Select Your Home Castle", window.innerWidth/2, 100);
+                    }
+                }
+                ctx.font = "16px sans-serif";
+                ctx.fillStyle = "black";
+                ctx.textAlign = "left";
+                ctx.fillText(counter, 50, 50);
+                requestAnimationFrame(mainloop);
+            }
+
+            function play() {
+                document.getElementById("mainscreen").style.display = "none";
+                document.getElementById("game").style.display = "";
+
+                window.addEventListener("mouseup", (evt) => {
+                    if (didSelectHome){
+                        if (isStratChange){
+                            if (angleAdjustMode) {
+                                angleAdjustMode = false;
+                                selected = undefined;
+                                hovered = undefined;
+                            }
+                            else {
+                                if (selected){
+                                    angleAdjustMode = true;
+                                }
+                                if (hovered) {
+                                    hovered.selected = true;
+                                    selected = hovered;
+                                }
+                            }
+                        }
+                    }
+                    else {
+                        connection.send("pc " + mousePos.gameX + " " + mousePos.gameY); // place castle at position
+                        didSelectHome = true;
+                    }
+                });
+                
+                mainloop();
+            }
+
+            window.onresize = () => {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            };
+            
+            window.onresize();
+        </script>
+    </body>
+</html>

@@ -1,0 +1,1 @@
+g++ server.cpp -o server-`uname`-`uname -i` --std=gnu++20 -g
