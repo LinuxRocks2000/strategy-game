@@ -76,6 +76,8 @@ struct Client;
 
 
 struct GameObject {
+    long banner = -1;
+
     static unsigned long topId;
 
     unsigned long id = -1;
@@ -400,7 +402,7 @@ struct Client {
         std::vector<std::string> args = splitString(message.substr(1, message.size() - 1), ' ');
         processingMutex.lock();
         if (command == 'c'){
-            if (args.size() && !playing){
+            if ((args[0] != "_spectator") && (!playing)){ // If the first argument (code) is not spectator mode, and we aren't playing.
                 if (args[0] == code){
                     std::cout << "New player logged in with access code!" << std::endl;
                     sendText("s"); // SUCCESS
@@ -498,10 +500,13 @@ struct Client {
         for (GameObject* obj : objects){
             sendObject(obj);
         }
+        for (std::string banner : banners){
+            sendText((std::string)"b" + banner);
+        }
     }
 
     void sendObject(GameObject* obj){
-        sendText((std::string)"n" + obj -> identify() + " " + std::to_string(obj -> id) + " " + std::to_string(obj -> x) + " " + std::to_string(obj -> y) + " " + std::to_string(obj -> angle) + " " + (obj -> editable() ? "1" : "0") + " " + std::to_string(myBanner));
+        sendText((std::string)"n" + obj -> identify() + " " + std::to_string(obj -> id) + " " + std::to_string(obj -> x) + " " + std::to_string(obj -> y) + " " + std::to_string(obj -> angle) + " " + (obj -> editable() ? "1" : "0") + " " + std::to_string(obj -> banner));
     }
 
     void tick(unsigned int counter, bool mode){
@@ -559,12 +564,13 @@ struct Client {
     }
 
     void add(GameObject* thing){
-        addObject(thing);
         thing -> owner = this;
+        thing -> banner = myBanner;
         thing -> setLostCallback([this](GameObject* thing){
             this -> lostCallback(thing);
         });
         myFighters.push_back(thing);
+        addObject(thing);
         sendText((std::string)"a" + std::to_string(thing -> id));
     }
 
@@ -605,6 +611,31 @@ struct Client {
 };
 
 
+class ChestObject : public GameObject {
+    int lives = 2;
+    
+    char identify() {
+        return 'C'; // lowercase c = castle, uppercase C = chest
+    }
+
+    void destroy(){
+        lives --;
+        if (lives <= 0){
+            rm = true;
+            if (killer -> owner != NULL){
+                killer -> owner -> collect(50);
+            }
+        }
+    }
+
+    void update() {};
+
+    Box box () {
+        return { x - 15, y - 15, x + 15, y + 15 };
+    }
+};
+
+
 std::vector <Client*> clients;
 std::mutex clientListMutex;
 
@@ -616,17 +647,53 @@ long micros(){
     return time.tv_sec * 1000000 + time.tv_usec;
 }
 
+void randomObject(){
+    bool chest = rand() % 2;
+    GameObject* g;
+    if (chest){
+        g = new ChestObject;
+    }
+    else {
+        g = new WallObject;
+    }
+    g -> x = rand() % gameSize;
+    g -> y = rand() % gameSize;
+    g -> goalX = g -> x;
+    g -> goalY = g -> y;
+    bool isGood = true;
+    for (GameObject* object : objects){
+        if (object -> identify() == 'c'){
+            if ((std::abs(g -> x - object -> x) < 400) && (std::abs(g -> y - object -> y) < 400)){
+                isGood = false;
+            }
+        }
+    }
+    if (isGood){
+        addObject(g);
+    }
+    else {
+        delete g;
+    }
+}
+
+
+long newObjectTTL = 300;
+
 void tick(){
     if (!playing){
         return;
     }
     if (livePlayerCount == 1){
+        long winningBanner = -1;
         for (Client* cli : clients){
             if (cli -> is_authorized){
                 cli -> sendText("W"); // You won the game!
+                winningBanner = cli -> myBanner;
             }
-            else{
-                cli -> sendText("E"); // The game has ended.
+        }
+        for (Client* cli : clients){
+            if (cli -> myBanner != winningBanner){
+                cli -> sendText("E" + std::to_string(winningBanner)); // The game has ended, and the person identified by that banner one.
             }
         }
         std::cout << "\033[32mThe game ended with a winner!\033[0m" << std::endl;
@@ -650,6 +717,11 @@ void tick(){
         }
     }
     if (!stratChangeMode){
+        newObjectTTL --;
+        if (newObjectTTL < 0){
+            newObjectTTL = rand() % 200 + 50;
+            randomObject();
+        }
         for (size_t i = 0; i < objects.size(); i ++){
             GameObject* obj = objects[i];
             if (obj -> rm){
@@ -709,7 +781,17 @@ void* interactionThread(void* _){
         std::string command;
         std::cout << "> " << std::flush;
         std::getline(std::cin, command);
-        if (isPasswordChange){
+        if (command == "start"){
+            std::cout << "Starting game." << std::endl;
+            for (int x = 0; x < livePlayerCount * 5; x ++){
+                randomObject();
+            }
+            playing = true;
+        }
+        else if (command == "change password"){
+            isPasswordChange = true;
+            std::cout << "\033[4mEnter the new passcode\033[0m" << std::endl;
+            std::getline(std::cin, command);
             free(code);
             code = (char*)malloc(command.size() + 1);
             for (size_t i = 0; i < command.size(); i ++){
@@ -719,13 +801,36 @@ void* interactionThread(void* _){
             std::cout << "Password changed to " << code << std::endl;
             isPasswordChange = false;
         }
-        else if (command == "start"){
-            std::cout << "Starting game." << std::endl;
-            playing = true;
+        else if (command == "data"){
+            std::cout << (std::string)"\033[34mLiving players: \033[0m\033[1m" + std::to_string(livePlayerCount) + "\033[0m" << std::endl;
+            std::cout << (std::string)"\033[33mTotal clients: \033[0m\033[1m" + std::to_string(clients.size()) + "\033[0m" << std::endl;
+            std::cout << (std::string)"\033[32mSpectators: \033[0m\033[1m" + std::to_string(clients.size() - livePlayerCount) + "\033[0m" << std::endl;
+            std::cout << (std::string)"\033[91mTotal object count: \033[0m\033[1m" + std::to_string(objects.size()) + "\033[0m" << std::endl;
+            std::map <char, long> breakdown;
+            std::cout << "--- Castle information ---" << std::endl;
+            for (GameObject* obj : objects) {
+                char sign = obj -> identify();
+                if (breakdown.contains(sign)){
+                    breakdown[sign] ++;
+                }
+                else{
+                    breakdown[sign] = 1;
+                }
+                if (sign == 'c'){
+                    std::cout << "At (" << obj -> x << ", " << obj -> y << "), there is a castle with banner " << obj -> banner << " (sign " << banners[obj -> banner] << ")." << std::endl;
+                }
+            }
+            std::cout << "--- Breakdown of objects by callsign (c = Castle, f = Fighter, t = Tiefighter, s = Sniper, b = Bullet, w = Wall, C = chest) ---" << std::endl;
+            for (std::pair<const char, long>& object : breakdown){
+                std::cout << object.first << ": " << object.second << std::endl;
+            }
+            std::cout << std::endl;
+            std::cout << (std::string)"\033[36mPassword: \033[0m\033[1m" + code + "\033[0m" << std::endl;
         }
-        else if (command == "change password"){
-            isPasswordChange = true;
-            std::cout << "\033[4mEnter the new passcode\033[0m" << std::endl;
+        else if (command == "broadcast"){
+            std::cout << "\033[4mEnter the message to broadcast\033[0m" << std::endl;
+            std::getline(std::cin, command);
+            broadcast("B" + command);
         }
     }
 }
@@ -787,7 +892,11 @@ void GameObject::shoot(float angle, float speed, float dist, int duration){
 unsigned long GameObject::topId = 0;
 
 
-int main(){
+int main(int argc, char** argv){
+    int port = 3000;
+    if (argc > 1){
+        port = std::stoi(argv[1]);
+    }
     FILE* random = fopen("/dev/urandom", "r");
     srand(fgetc(random));
     fclose(random);
@@ -832,6 +941,6 @@ int main(){
         }
         clientListMutex.unlock();
     });
-    webserver.port(3000).multithreaded().run();
+    webserver.port(port).multithreaded().run();
     return 0;
 }
