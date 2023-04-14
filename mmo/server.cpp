@@ -1,4 +1,7 @@
-/*
+/* By Tyler Clarke
+    The server for MMOSG, a multiplayer strategy game (basically Rampart + Galaga).
+    Please give credit if you copy or otherwise use anything in here!
+
     The structure:
     FPS times per second, the game is simulated another tick.
     Every time something changes, all the connected Clients are sent some information on what happened, such as
@@ -14,6 +17,7 @@
 #include <vector>
 #include <mutex>
 #include <functional>
+#include "logo.h"
 #define PI 3.141592
 #define FPS 30
 const float ALLOWED_MICROS_PER_FRAME = 1000000.f/FPS;
@@ -27,19 +31,26 @@ unsigned long gameSize = 5000;
 long millisPerTick = 0;
 std::string serverName = "StrategyGameMMO";
 
+std::vector<std::string> banners;
+
 void broadcast(std::string broadcast);
 
 
 std::vector<std::string> splitString(std::string str, char delim){
     std::vector<std::string> ret;
     std::string buf;
+    bool escape;
     for (char c : str){
-        if (c == delim){
+        if ((c == delim) && (!escape)){
             ret.push_back(buf);
             buf = "";
         }
+        else if ((c == '\\') && (!escape)){
+            escape = true;
+        }
         else{
             buf += c;
+            escape = false;
         }
     }
     if (buf.size() != 0){
@@ -358,6 +369,7 @@ struct Client {
     CastleObject* deMoi = new CastleObject;
     std::vector <GameObject*> myFighters;
     long score = 0;
+    size_t myBanner = 0;
 
     void collect(int amount){
         score += amount;
@@ -395,6 +407,10 @@ struct Client {
                     metadata();
                     is_authorized = true;
                     livePlayerCount ++;
+                    banners.push_back(args[1]);
+                    broadcast((std::string)"b" + args[1]); // b = add banner
+                    myBanner = banners.size() - 1;
+                    std::cout << "New banner " << args[1] << std::endl;
                 }
                 else{
                     std::cout << "Player failed to log in - has the wrong code?" << std::endl;
@@ -485,7 +501,7 @@ struct Client {
     }
 
     void sendObject(GameObject* obj){
-        sendText((std::string)"n" + obj -> identify() + " " + std::to_string(obj -> id) + " " + std::to_string(obj -> x) + " " + std::to_string(obj -> y) + " " + std::to_string(obj -> angle) + " " + (obj -> editable() ? "1" : "0"));
+        sendText((std::string)"n" + obj -> identify() + " " + std::to_string(obj -> id) + " " + std::to_string(obj -> x) + " " + std::to_string(obj -> y) + " " + std::to_string(obj -> angle) + " " + (obj -> editable() ? "1" : "0") + " " + std::to_string(myBanner));
     }
 
     void tick(unsigned int counter, bool mode){
@@ -691,6 +707,7 @@ bool isPasswordChange = false;
 void* interactionThread(void* _){
     while (true){
         std::string command;
+        std::cout << "> " << std::flush;
         std::getline(std::cin, command);
         if (isPasswordChange){
             free(code);
@@ -774,13 +791,14 @@ int main(){
     FILE* random = fopen("/dev/urandom", "r");
     srand(fgetc(random));
     fclose(random);
-    std::cout << "┌───────────────────────────┐" << std::endl;
+    code = randCode<16>();
+    std::cout << STARTING_SCREEN;
+    /*std::cout << "┌───────────────────────────┐" << std::endl;
     std::cout << "│       \033[91;1mStrategy Game\033[0m       │" << std::endl;
     std::cout << "│      By Tyler Clarke      │" << std::endl;
     std::cout << "└───────────────────────────┘" << std::endl;
-    code = randCode<16>();
     std::cout << "Type 'start' and press enter to begin the game." << std::endl;
-    std::cout << "\033[32mSharing code: " << code << "\033[0m" << std::endl;
+    std::cout << "\033[32mSharing code: " << code << "\033[0m" << std::endl;*/
     pthread_t thread, interaction;
     pthread_create(&thread, NULL, mainthread, NULL);
     pthread_detach(thread);

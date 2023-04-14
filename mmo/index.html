@@ -1,3 +1,7 @@
+<!--
+    By Tyler Clarke
+    UI for MMOSG, a multiplayer strategy game (basically Rampart + Galaga)
+-->
 <!-- Oh, how I hate single file websites... Eh. This is the easiest way to handle the site. -->
 
 <!DOCTYPE html>
@@ -71,6 +75,7 @@
             var inventoryMode = false;
             var inventoryHovered = -1;
             var wallsTurn = 2;
+            var banners = [];
 
             var inventoryStuff = [
                 {
@@ -138,6 +143,29 @@
                 document.title = name;
             }
 
+            function splitString(string, delim = " "){
+                var ret = [];
+                var buf = "";
+                var escape = false;
+                for (var i = 0; i < string.length; i ++){
+                    if (!escape){
+                        if (string[i] == '\\'){
+                            escape = true;
+                            continue;
+                        }
+                        else if (string[i] == delim){
+                            ret.push(buf);
+                            buf = "";
+                        }
+                    }
+                    buf += string[i];
+                }
+                if (buf.length > 0){
+                    ret.push(buf);
+                }
+                return ret;
+            }
+
             connection.onmessage = (message) => {
                 var data = message.data;
                 var command = data[0];
@@ -157,6 +185,9 @@
                     else{
                         console.error("Got ERROR " + args[0]);
                     }
+                }
+                else if (command == "b"){
+                    banners.push(args[0]);
                 }
                 else if (command == "T"){
                     alert("Game over! It was a tie - nobody was left alive at the end. Pretty L, in my opinion.");
@@ -189,7 +220,8 @@
                             x: args[2] - 0,
                             y: args[3] - 0,
                             angle: args[4] - 0
-                        }
+                        },
+                        banner: banners[args[5] - 0]
                     };
                 }
                 else if (command == "a"){
@@ -236,7 +268,7 @@
             };
             var mode = 0;
             function start(){
-                connection.send("c" + document.getElementById("code").value);
+                connection.send("c" + document.getElementById("code").value + " Player");
                 mode = 1; // waiting for a response
             }
 
