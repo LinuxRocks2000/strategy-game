@@ -36,6 +36,18 @@ std::vector<std::string> banners;
 void broadcast(std::string broadcast);
 
 
+template <int length = 32>
+char* randCode(){
+    const char* characters = "1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#&";
+    const int len = strlen(characters);
+    char* ret = (char*)malloc(length);
+    for (int x = 0; x < length; x ++){
+        ret[x] = characters[rand() % len];
+    }
+    return ret;
+}
+
+
 std::vector<std::string> splitString(std::string str, char delim){
     std::vector<std::string> ret;
     std::string buf;
@@ -200,6 +212,44 @@ class BasicFighterObject : public GameObject {
 
     Box box (){
         return { x - 10, y - 10, x + 10, y + 10 };
+    }
+};
+
+
+class HypersonicMissileObject : public GameObject {
+    float xv = 0;
+    float yv = 0;
+
+    void update() {
+        double dx = goalX - x;
+        double dy = goalY - y;
+        float goToAngle = goalAngle;
+        if (((dx * dx) + (dy * dy)) > 10 * 10){
+            goToAngle = atan(dy/dx);
+            if (dx <= 0){
+                goToAngle += PI;
+            }
+        }
+        angle = angle * 0.9 + goToAngle * 0.1;
+        xv += cos(angle) * 0.3;
+        yv += sin(angle) * 0.3;
+        xv *= 0.99;
+        yv *= 0.99;
+        x += xv;
+        y += yv;
+        broadcast((std::string)"M" + std::to_string(id) + " " + std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(angle));
+    }
+
+    char identify() {
+        return 'h';
+    }
+
+    bool editable() {
+        return true;
+    }
+
+    Box box (){
+        return { x - 3, y - 3, x + 3, y + 3 };
     }
 };
 
@@ -395,7 +445,8 @@ struct Client {
     }
 
     void process(std::string message){ // INSIDE A CROW THREAD
-        if (message == "_"){ // Heartbeat message
+        if (message == "_"){ // ping
+            sendText("_"); // pong
             return;
         }
         char command = message[0];
@@ -478,6 +529,17 @@ struct Client {
                         collect(-30);
                     }
                 }
+                else if (args[0] == "h"){
+                    if (score >= 5){
+                        HypersonicMissileObject* f = new HypersonicMissileObject;
+                        f -> x = std::stoi(args[1]);
+                        f -> y = std::stoi(args[2]);
+                        f -> goalX = f -> x;
+                        f -> goalY = f -> y;
+                        add(f);
+                        collect(-5);
+                    }
+                }
             }
             else if (command == 'm'){
                 for (GameObject* obj : myFighters){
@@ -487,6 +549,10 @@ struct Client {
                         obj -> goalAngle = std::stod(args[3]);
                     }
                 }
+            }
+            else if (command == 'C'){
+                long monies = std::abs(std::stoi(args[0]));
+                collect(-monies);
             }
         }
         else{
@@ -599,14 +665,27 @@ struct Client {
         newFighter<TieFighterObject>(deMoi -> x + relX, deMoi -> y + relY, angle);
     }
 
+    void newRelativeHypersonicMissile(long relX, long relY, float angle = 0){
+        newFighter<HypersonicMissileObject>(deMoi -> x + relX, deMoi -> y + relY, angle);
+    }
+
     void fighters(){
         newRelativeFighter(200, 0);
         newRelativeFighter(-200, 0, PI);
         newRelativeFighter(0, 200);
         newRelativeFighter(0, -200);
-        newRelativeSniper(100, 0, PI/2);
-        newRelativeTiefighter(0, 100);
-        newRelativeTiefighter(0, -100, PI);
+        //newRelativeSniper(100, 0, PI/2);
+        //newRelativeTiefighter(0, 100);
+        //newRelativeTiefighter(0, -100, PI);
+        //newRelativeHypersonicMissile(-100, 100, PI/4);
+        /*newRelativeHypersonicMissile(200, 0);
+        newRelativeHypersonicMissile(-200, 0, PI);
+        newRelativeHypersonicMissile(0, 200);
+        newRelativeHypersonicMissile(0, -200);
+        newRelativeHypersonicMissile(100, 0, PI/2);
+        newRelativeHypersonicMissile(0, 100);
+        newRelativeHypersonicMissile(0, -100, PI);
+        newRelativeHypersonicMissile(-100, 100, PI/4);*/
     }
 };
 
@@ -679,6 +758,20 @@ void randomObject(){
 
 long newObjectTTL = 300;
 
+void reset(){
+    for (Client* cli : clients){
+        delete cli;
+    }
+    clients.clear();
+    for (GameObject* obj : objects){ // Delete the objects last, because the client deletion routines use them. I think.
+        delete obj;
+    }
+    objects.clear();
+    counter = 1;
+    stratChangeMode = false;
+    playing = false;
+}
+
 void tick(){
     if (!playing){
         return;
@@ -696,24 +789,24 @@ void tick(){
                 cli -> sendText("E" + std::to_string(winningBanner)); // The game has ended, and the person identified by that banner one.
             }
         }
-        std::cout << "\033[32mThe game ended with a winner!\033[0m" << std::endl;
-        exit(0);
+        std::cout << "\033[32mThe game ended with a winner! Resetting.\033[0m" << std::endl;
+        reset();
     }
     else if (livePlayerCount == 0){
         for (Client* cli : clients){
             cli -> sendText("T"); // The game was a tie.
         }
-        std::cout << "\033[33mThe game ended with a tie.\033[0m" << std::endl;
-        exit(0);
+        std::cout << "\033[33mThe game ended with a tie. Resetting.\033[0m" << std::endl;
+        reset();
     }
     counter --;
     if (counter == 0){
         stratChangeMode = !stratChangeMode;
         if (stratChangeMode){
-            counter = FPS * 30; // 20 seconds in strat change mode
+            counter = FPS * 30; // 30 seconds in strat change mode
         }
         else{
-            counter = FPS * 20; // For every 10 seconds of play. oooh this gon' be funnnnn
+            counter = FPS * 20; // For every 20 seconds of play. oooh this gon' be funnnnn
         }
     }
     if (!stratChangeMode){
@@ -738,24 +831,29 @@ void tick(){
             for (size_t y = x + 1; y < objects.size(); y ++){ // prevent double-collisions by starting this at one more than the end of the set of known complete collisions
                 bool collided = false;
                 if (objects[x] -> box().check(objects[y] -> box())){
-                    if (objects[x] -> identify() == 'c'){
+                    char xWord = objects[x] -> identify();
+                    char yWord = objects[y] -> identify();
+                    if (xWord == 'c'){
                         // If the collision root object is a castle
-                        if (objects[y] -> identify() == 'b') {
+                        if ((yWord == 'b') || (yWord == 'h')) {
                             collided = true;
                         }
                     }
-                    else if (objects[x] -> identify() == 'b'){
+                    else if (xWord == 'b'){
                         // If the collision root object is a bullet
                         // bullets collide with everything.
                         collided = true;
                     }
-                    else if (objects[x] -> identify() == 'w'){
-                        if (objects[y] -> identify() != 'c'){
+                    else if (xWord == 'w'){
+                        if (yWord != 'c'){
                             collided = true;
                         }
                     }
+                    else if (xWord == 'h'){
+                        collided = true; // They hit *everything*
+                    }
                     else{ // If it's anything else, it's a fighter.
-                        if (objects[y] -> identify() != 'c'){
+                        if (yWord != 'c'){
                             collided = true;
                         }
                     }
@@ -808,7 +906,8 @@ void* interactionThread(void* _){
             std::cout << (std::string)"\033[91mTotal object count: \033[0m\033[1m" + std::to_string(objects.size()) + "\033[0m" << std::endl;
             std::map <char, long> breakdown;
             std::cout << "--- Castle information ---" << std::endl;
-            for (GameObject* obj : objects) {
+            for (size_t i = 0; i < objects.size(); i ++) {
+                GameObject* obj = objects[i];
                 char sign = obj -> identify();
                 if (breakdown.contains(sign)){
                     breakdown[sign] ++;
@@ -817,20 +916,33 @@ void* interactionThread(void* _){
                     breakdown[sign] = 1;
                 }
                 if (sign == 'c'){
-                    std::cout << "At (" << obj -> x << ", " << obj -> y << "), there is a castle with banner " << obj -> banner << " (sign " << banners[obj -> banner] << ")." << std::endl;
+                    std::cout << i << ": At (" << obj -> x << ", " << obj -> y << "), there is a castle with banner " << obj -> banner << " (sign " << banners[obj -> banner] << ")." << std::endl;
                 }
             }
             std::cout << "--- Breakdown of objects by callsign (c = Castle, f = Fighter, t = Tiefighter, s = Sniper, b = Bullet, w = Wall, C = chest) ---" << std::endl;
             for (std::pair<const char, long>& object : breakdown){
                 std::cout << object.first << ": " << object.second << std::endl;
             }
+            std::cout << "--- Current game size: " << gameSize << " ---" << std::endl;
             std::cout << std::endl;
-            std::cout << (std::string)"\033[36mPassword: \033[0m\033[1m" + code + "\033[0m" << std::endl;
+            std::cout << "\033[36mPassword: \033[0m\033[1m" << code << "\033[0m" << std::endl;
         }
         else if (command == "broadcast"){
             std::cout << "\033[4mEnter the message to broadcast\033[0m" << std::endl;
             std::getline(std::cin, command);
             broadcast("B" + command);
+        }
+        else if (command == "resize") {
+            std::cout << "\033[4mEnter the new gameboard size\033[0m" << std::endl;
+            std::getline(std::cin, command);
+            gameSize = std::stoi(command);
+            for (Client* cli : clients){
+                cli -> metadata(); // metadata changed - rebroadcast
+            }
+        }
+        else if (command == "reset"){
+            std::cout << "RESETTING SERVER" << std::endl;
+            reset();
         }
     }
 }
@@ -843,18 +955,6 @@ void* mainthread(void* _){
             tick();
         }
     }
-}
-
-
-template <int length = 32>
-char* randCode(){
-    const char* characters = "1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#&";
-    const int len = strlen(characters);
-    char* ret = (char*)malloc(length);
-    for (int x = 0; x < length; x ++){
-        ret[x] = characters[rand() % len];
-    }
-    return ret;
 }
 
 

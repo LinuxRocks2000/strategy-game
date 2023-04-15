@@ -16,13 +16,18 @@
                 margin: 0px;
                 padding: 0px;
                 overflow: hidden;
+                max-height: 100vh;
             }
             #mainscreen {
-                position: absolute;
+                /*position: absolute;
                 top: 50%;
                 left: 50%;
-                transform: translate(-50%, -50%);
+                transform: translate(-50%, -50%);*/
                 text-align: center;
+                padding: 20vh;
+                overflow-y: scroll;
+                display: inline-block;
+                max-height: 60vh;
             }
             #start {
                 border: none;
@@ -35,26 +40,80 @@
                 top: 0px;
                 left: 0px;
             }
+            ul {
+                text-align: left;
+            }
+            #menu {
+                padding: 50px;
+                margin: 50px;
+                background-color: lightgrey;
+            }
+            #notConnected {
+                position: absolute;
+                top: 0px;
+                left: 0px;
+                width: 10vw;
+                height: 10vh;
+                background-color: black;
+                color: red;
+                text-align: center;
+            }
         </style>
     </head>
     <body>
         <div id="mainscreen">
-            Banner (one word only - anything after a space will be ignored; this helps other players identify who's shooting at them and who won): <input type="text" id="banner" /><br />
-            Entry code (leave blank for spectator mode): <input type="text" id="code" /><br/>
-            <button id="start" onclick="start();">Start</button>
+            <div id="menu">
+                Banner (one word only - anything after a space will be ignored; this helps other players identify who's shooting at them and who won):<input type="text" id="banner" /><br />
+                Entry code (leave blank for spectator mode): <input type="text" id="code" /><br/>
+                <button id="start" onclick="start();">Start</button><br><br>
+            </div>
+            MMOSG (Massively Multiplayer Online Strategy Game) is a video game developed by Tyler Clarke. It is the sequel to Strategy Game and is meant to host as many players as wish to join each other in friendly combat.
+            It is played on a large board (usually 5000x5000 pixels, although it can be any size). When you enter the game, you may place a castle, and then you wait until the DM (the person controlling the server) begins the game.
+            <h2>Basic Controls and Gameplay</h2>
+            The arrow keys move you across the board. It's fairly easy to figure out - just press a few buttons, and you'll learn quickly (note: if at any time you start moving up, down, left, or right uncontrollably, press every arrow key and it should go back to normal. It's a browser problem).
+            Mouse is how you do most of the actions. Click on the head of a ship you own, and the goal pos controller will stick to your mouse - click again to drop it at a position, and a third time to control the angle.
+            You can move the canvas while moving pieces - this is how you move long distances efficiently.<br>
+            There are two modes of play - "Move Ships" mode and "Watch" mode, usually known as "strat" and "play" mode. In strat mode, you move your ships and such, and if you haven't already used your entire wall allottment, you can press "w" to create a wall at your mouse position.
+            In Watch mode, you can only hope you anticipated your enemy's motions well enough to defend against them, because you can't change your ship positioning. Strat mode lasts ~30 seconds and play mode ~20.<br>
+            Most ships shoot bullets at regular intervals. These bullets (little green circles) hit things, destroying themselves and counting one hit towards the thing they hit; you can also hit things by running your ships into them, which will also count one hit. All flyers and bullets will be destroyed after one hit (bullets can hit bullets!), but walls and chests take two hits and castles take three.<br>
+            Pressing "i" opens the inventory, in which you can buy things.<br>
+            <b>Warning: Friendly fire is a thing! Your flyers can hit each other, your bullets can hit your flyers and your castle. All bullets and all flyers are approximately equal. I've seen people in a winning position lose because they forgot tie fighters shoot backwards!</b><br><br>
+            Your goal is to destroy all enemy castles. This is a last-man-standing game!
+            <h2>Types</h2>
+            There are several types of objects in the game.
+            <ul>
+                <li>Castles: These are the large green squares. They're the most important piece, like the King in Chess; they withstand 3 hits.</li>
+                <li>Walls: The little gray squares. Absorb two hits each. You can place a few every turn.</li>
+                <li>Chests: Little pink-and-orange squares. They absorb two hits each as well, and have similar properties to a wall, except that whoever destroys them gets 50 points.</li>
+                <li>Bullets: The tiny green circles. Destroy things. What else is there to say?</li>
+                <li>Basic Fighters: Purple (pink, if they're on your side) fighters. Shoot single bullets out the front in whatever direction they're facing. You get a few at the start of the game. They're slow and don't have very good bullet range. Cost 10 points in the inventory.</li>
+                <li>Tie Fighters: Basic Fighters, but blue and with small extensions. Shoot two bullets - one out the front, one out the back. Slightly faster than Basic Fighters. Hazardous. Cost 20 points in the inventory.</li>
+                <li>Snipers: Skinny black fighters. Move very fast, are very controlled, and shoot much less often but have much higher range than the other fighters. Cost 30 points in the inventory.</li>
+                <li>Hypersonic Missiles: Tiny ships with a similar design to enemies in the original Strategy Game: a small circle with a line extending well beyond it indicating direction. They don't shoot, but they move fast - good for dueling, because of how wide an area their swoops cover. Cost 5 points in the inventory (and they're barely worth it. Scutting little monsters.)</li>
+            </ul>
         </div>
         <canvas id="game" style="display: none;">
 
         </canvas>
+        <div id="notConnected">Not Connected!<br>Reload the page.</div>
         <script>
             var canvas = document.getElementById("game");
             var ctx = canvas.getContext("2d");
-            var connection = new WebSocket("ws" + (window.location.protocol == "https:" ? "s" : "") + "://" + location.host + location.pathname + (location.pathname.endsWith("/") ? "" : "/") + "game"); // Make it adaptive, so it fits in my reverse proxy
-            connection.onopen = () => {
-                setInterval(() => {
-                    connection.send("_");
-                }, 100);
-            };
+            var ping = false;
+            var connected = true;
+            var connection = connection = new WebSocket("ws" + (window.location.protocol == "https:" ? "s" : "") + "://" + location.host + location.pathname + (location.pathname.endsWith("/") ? "" : "/") + "game"); // Make it adaptive, so it fits in my reverse proxy;
+            setInterval(() => {
+                connected = !ping;
+                connection.send("_");
+                ping = true;
+                var bannerNotConnected = document.getElementById("notConnected");
+                if (!connected) {
+                    bannerNotConnected.style.display = "";
+                }
+                else {
+                    bannerNotConnected.style.display = "none";
+                }
+            }, 200);
             var playing = false;
             var cX = 0;
             var cY = 0;
@@ -95,9 +154,15 @@
                     cost: 30
                 },
                 {
+                    name: "Hypersonic Missile",
+                    word: "h",
+                    cost: 5
+                },
+                {
                     name: "Extra Walls",
                     cbk: () => {
                         wallsTurn += 2;
+                        connection.send("C-30")
                     },
                     cost: 30
                 }
@@ -138,6 +203,11 @@
                         }
                     }
                 }
+            };
+
+            window.onwheel = (evt) => {
+                xv += evt.deltaX;
+                yv += evt.deltaY;
             };
 
             function setName(name){
@@ -266,6 +336,9 @@
                     mine = [];
                     alert("You lose! You can close the tab now, or continue as a spectator. If it makes you feel any better, the person responsible for your loss got 50 points!");
                 }
+                else if (command == "_"){
+                    ping = false; // pong.
+                }
                 else {
                     console.warn("Got unrecognizable data: " + message.data);
                 }
@@ -305,7 +378,7 @@
                     ctx.fillStyle = "red";
                     ctx.textAlign = "center";
                     ctx.font = "bold 40px monospace";
-                    ctx.fillText("Inventory", window.innerWidth/2, 100);
+                    ctx.fillText("Inventory", window.innerWidth / 2, 100);
                     var columnCount = Math.floor(window.innerWidth / 200);
                     for (var i = 0; i < inventoryStuff.length; i ++){
                         var x = i % columnCount;
@@ -449,6 +522,24 @@
                         ctx.arc(object.x, object.y, 5, 0, Math.PI * 2);
                         ctx.fill();
                     }
+                    else if (object.value == "h"){
+                        if (mine.indexOf(object.id) == -1) {
+                            ctx.strokeStyle = "#AA00AA";
+                        }
+                        else {
+                            ctx.strokeStyle = "purple";
+                        }
+                        ctx.fillStyle = "brown";
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.arc(object.x, object.y, 5, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(object.x, object.y);
+                        ctx.lineTo(object.x + Math.cos(object.angle) * 30, object.y + Math.sin(object.angle) * 30);
+                        ctx.stroke();
+                    }
                     else if (object.value == "w"){
                         ctx.fillStyle = "grey";
                         ctx.fillRect(object.x - 15, object.y - 15, 30, 30);
@@ -537,6 +628,34 @@
                             
                         }
                     });*/
+                }
+                else if (keysDown["m"]){
+                    const minimapSize = 200;
+                    const scaling = minimapSize/gameSize;
+                    var rootX = mousePos.gameX - minimapSize;
+                    var rootY = mousePos.gameY - minimapSize;
+                    if (rootX < 0){
+                        rootX = 0;
+                    }
+                    if (rootY < 0){
+                        rootY = 0;
+                    }
+                    ctx.globalAlpha = 0.8;
+                    ctx.fillStyle = "white";
+                    ctx.fillRect(rootX, rootY, minimapSize, minimapSize);
+                    ctx.fillStyle = "red";
+                    ctx.fillRect(rootX + (mousePos.gameX) * scaling - 2.5, rootY + (mousePos.gameY) * scaling - 2.5, 5, 5);
+                    Object.values(objects).forEach(obj => {
+                        if (obj.value == "c"){
+                            ctx.fillStyle = "green";
+                            ctx.fillRect(rootX + obj.x * scaling - 2, rootY + obj.y * scaling - 2, 4, 4);
+                        }
+                        else if (["f", "t", "h"].indexOf(obj.value) != 1){
+                            ctx.fillStyle = "black";
+                            ctx.fillRect(rootX + obj.x * scaling - 1, rootY + obj.y * scaling - 1, 2, 2);
+                        }
+                    });
+                    ctx.globalAlpha = 1;
                 }
                 ctx.translate(cX, cY);
                 if (keysDown["ArrowUp"]){
