@@ -905,7 +905,11 @@ void* interactionThread(void* _){
             std::cout << (std::string)"\033[32mSpectators: \033[0m\033[1m" + std::to_string(clients.size() - livePlayerCount) + "\033[0m" << std::endl;
             std::cout << (std::string)"\033[91mTotal object count: \033[0m\033[1m" + std::to_string(objects.size()) + "\033[0m" << std::endl;
             std::map <char, long> breakdown;
-            std::cout << "--- Castle information ---" << std::endl;
+            std::cout << "--- Client and Castle information ---" << std::endl;
+            for (size_t i = 0; i < clients.size(); i ++) {
+                Client* client = clients[i];
+                std::cout << "Client " << i << " owns a castle at (" << client -> deMoi -> x << ", " << client -> deMoi -> y << "), with banner " << client -> myBanner << " (sign " << banners[client -> myBanner] << ")." << std::endl;
+            }
             for (size_t i = 0; i < objects.size(); i ++) {
                 GameObject* obj = objects[i];
                 char sign = obj -> identify();
@@ -914,9 +918,6 @@ void* interactionThread(void* _){
                 }
                 else{
                     breakdown[sign] = 1;
-                }
-                if (sign == 'c'){
-                    std::cout << i << ": At (" << obj -> x << ", " << obj -> y << "), there is a castle with banner " << obj -> banner << " (sign " << banners[obj -> banner] << ")." << std::endl;
                 }
             }
             std::cout << "--- Breakdown of objects by callsign (c = Castle, f = Fighter, t = Tiefighter, s = Sniper, b = Bullet, w = Wall, C = chest) ---" << std::endl;
@@ -943,6 +944,24 @@ void* interactionThread(void* _){
         else if (command == "reset"){
             std::cout << "RESETTING SERVER" << std::endl;
             reset();
+        }
+        else if (command == "quit"){
+            std::cout << "Quitting." << std::endl;
+            exit(0);
+        }
+        else if (command == "drop client"){
+            std::cout << "\033[4mEnter the number of the client to drop (Be very careful! This will delete the client and everything they own on the board!)\033[0m" << std::endl;
+            std::getline(std::cin, command);
+            size_t toKill = std::stoi(command);
+            for (size_t i = 0; i < objects.size(); i ++){
+                if (objects[i] -> owner == clients[toKill]){
+                    delete objects[i];
+                    objects.erase(objects.begin() + i);
+                    i --;
+                }
+            }
+            delete clients[toKill];
+            clients.erase(clients.begin() + toKill);
         }
     }
 }
