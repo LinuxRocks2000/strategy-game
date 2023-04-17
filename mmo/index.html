@@ -136,6 +136,7 @@
             var inventoryHovered = -1;
             var wallsTurn = 2;
             var banners = [];
+            var inventoryPlace = undefined;
 
             var inventoryStuff = [
                 {
@@ -157,6 +158,12 @@
                     name: "Hypersonic Missile",
                     word: "h",
                     cost: 5
+                },
+                {
+                    name: "Turret",
+                    word: "T",
+                    cost: 100,
+                    place: true
                 },
                 {
                     name: "Extra Walls",
@@ -550,6 +557,19 @@
                         ctx.fillStyle = "gold";
                         ctx.fillRect(object.x - 15, object.y - 5, 30, 20);
                     }
+                    else if (object.value == "T"){
+                        ctx.fillStyle = "black";
+                        ctx.fillRect(object.x - 10, object.y - 10, 20, 20);
+                        ctx.translate(object.x, object.y);
+                        ctx.rotate(object.angle);
+                        ctx.fillStyle = "yellow";
+                        ctx.fillRect(-5, -2.5, 40, 5);
+                        ctx.rotate(-object.angle);
+                        ctx.translate(-object.x, -object.y);
+                    }
+                    else {
+                        console.warn("Unkown object of type " + object.value);
+                    }
                     if (mousePos.gameX > object.x - 10 && mousePos.gameX < object.x + 10 && mousePos.gameY > object.y - 10 && mousePos.gameY < object.y + 10) {
                         if (mine.indexOf(object.id) != -1) {
                             if (object.isEditable){
@@ -605,6 +625,7 @@
                     selected = undefined;
                     angleAdjustMode = false;
                     hovered = undefined;
+                    inventoryPlace = undefined;
                 }
                 if (keysDown["c"] && myCastle) {
                     ctx.fillStyle = "white";
@@ -650,7 +671,7 @@
                             ctx.fillStyle = "green";
                             ctx.fillRect(rootX + obj.x * scaling - 2, rootY + obj.y * scaling - 2, 4, 4);
                         }
-                        else if (["f", "t", "h"].indexOf(obj.value) != 1){
+                        else if (obj.value != "b" && obj.value != "s" && obj.value != "w" && obj.value != "C"){
                             ctx.fillStyle = "black";
                             ctx.fillRect(rootX + obj.x * scaling - 1, rootY + obj.y * scaling - 1, 2, 2);
                         }
@@ -695,7 +716,20 @@
                             ctx.fillText("Waiting for game start...", window.innerWidth/2, 100);
                         }
                         else if (isStratChange){
-                            ctx.fillText("Move your ships!", window.innerWidth/2, 100);
+                            if (inventoryPlace) {
+                                ctx.fillStyle = "red";
+                                ctx.textAlign = "center";
+                                ctx.font = "bold 40px monospace";
+                                if (canPlaceWall){
+                                    ctx.fillText("Place your new gamepiece...", window.innerWidth / 2, 100);
+                                }
+                                else {
+                                    ctx.fillText("Can't place a gamepiece here.", window.innerWidth / 2, 100);
+                                }
+                            }
+                            else {
+                                ctx.fillText("Move your ships!", window.innerWidth/2, 100);
+                            }
                             // Ship movement goes here.
                         }
                     }
@@ -724,9 +758,20 @@
 
                 window.addEventListener("mouseup", (evt) => {
                     if (didSelectHome){
-                        if (inventoryHovered != -1) {
+                        if (inventoryPlace){
+                            if (canPlaceWall){
+                                connection.send("p" + inventoryPlace + " " + mousePos.gameX + " " + mousePos.gameY);
+                                inventoryPlace = undefined;
+                            }
+                        }
+                        else if (inventoryHovered != -1) {
                             if (inventoryStuff[inventoryHovered].word){
-                                connection.send("p" + inventoryStuff[inventoryHovered].word + " " + (myCastle.x + (Math.random() * 300 - 150)) + " " + (myCastle.y + (Math.random() * 300 - 150)));
+                                if (inventoryStuff[inventoryHovered].place) {
+                                    inventoryPlace = inventoryStuff[inventoryHovered].word;
+                                }
+                                else{
+                                    connection.send("p" + inventoryStuff[inventoryHovered].word + " " + (myCastle.x + (Math.random() * 300 - 150)) + " " + (myCastle.y + (Math.random() * 300 - 150)));
+                                }
                             }
                             else {
                                 inventoryStuff[inventoryHovered].cbk();

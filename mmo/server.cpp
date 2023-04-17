@@ -48,6 +48,28 @@ char* randCode(){
 }
 
 
+double coterminal(double angle, double about = PI * 2){
+    while (angle < 0){
+        angle += about;
+    }
+    while (angle >= about){
+        angle -= about;
+    }
+    return angle;
+}
+
+
+double errorify(double one, double two, double about = PI * 2) {
+    one = coterminal(one, about);
+    two = coterminal(two, about);
+    double error = coterminal(two - one, about);
+    if (error < PI){
+        error = error - PI * 2;
+    }
+    return error;
+}
+
+
 std::vector<std::string> splitString(std::string str, char delim){
     std::vector<std::string> ret;
     std::string buf;
@@ -142,6 +164,9 @@ struct GameObject {
 
     void shoot(float angle, float speed = 20, float dist = 20, int duration = -1);
 };
+
+
+std::vector <GameObject*> objects;
 
 
 class CastleObject : public GameObject {
@@ -406,10 +431,62 @@ class WallObject : public GameObject {
 };
 
 
+class TurretObject : public GameObject {
+    double angleV = 0;
+    long TTL = 2000;
+    int shootTimer = 20;
+
+    char identify() {
+        return 'T';
+    }
+
+    void update() {
+        TTL --;
+        if (TTL < 0){
+            rm = true;
+            return;
+        }
+        GameObject* closestShootah = NULL;
+        double bestDistance = 500 * 500; // It won't seek ships more than 500 away
+        double bestDx = 0;
+        double bestDy = 0;
+        for (GameObject* obj : objects){
+            if (obj -> owner != owner){
+                char id = obj -> identify();
+                if ((id != 'b') && (id != 'T') && (id != 'w') && (id != 'c') && (id != 'C')){
+                    double dX = obj -> x - x;
+                    double dY = obj -> y - y;
+                    double d = dX * dX + dY * dY;
+                    if (d < bestDistance){
+                        bestDistance = d;
+                        closestShootah = obj;
+                        bestDx = dX;
+                        bestDy = dY;
+                    }
+            }
+            }
+        }
+        if (closestShootah != NULL){
+            goalAngle = atan2(bestDy, bestDx);
+            shootTimer --;
+            if (shootTimer < 0){
+                shoot(angle);
+                shootTimer = 30;
+            }
+        }
+        angleV += errorify(angle, goalAngle) * -0.005;
+        angleV *= 0.85;
+        angle += angleV;
+        broadcast((std::string)"M" + std::to_string(id) + " " + std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(angle));
+    }
+
+    Box box (){
+        return { x - 10, y - 10, x + 10, y + 10 };
+    }
+};
+
+
 void addObject(GameObject* object);
-
-
-std::vector <GameObject*> objects;
 
 
 struct Client {
@@ -540,6 +617,17 @@ struct Client {
                         collect(-5);
                     }
                 }
+                else if (args[0] == "T"){
+                    if (score >= 100){
+                        TurretObject* f = new TurretObject;
+                        f -> x = std::stoi(args[1]);
+                        f -> y = std::stoi(args[2]);
+                        f -> goalX = f -> x;
+                        f -> goalY = f -> y;
+                        add(f);
+                        collect(-100);
+                    }
+                }
             }
             else if (command == 'm'){
                 for (GameObject* obj : myFighters){
@@ -625,6 +713,20 @@ struct Client {
                         }
                     }
                     break;
+                case 'h':
+                    if (thing -> killer != NULL && thing -> killer -> owner != NULL){
+                        if (thing -> killer -> owner != this){
+                            thing -> killer -> owner -> collect(7);
+                        }
+                    }
+                    break;
+                case 'T':
+                    if (thing -> killer != NULL && thing -> killer -> owner != NULL){
+                        if (thing -> killer -> owner != this){
+                            thing -> killer -> owner -> collect(50);
+                        }
+                    }
+                    break;
             }
         }
     }
@@ -651,6 +753,11 @@ struct Client {
         thing -> goalAngle = angle;
         add(thing);
         return thing;
+    }
+
+    template <typename T>
+    void newRelativeThing(long relX, long relY, float angle = 0){
+        newFighter<T>(deMoi -> x + relX, deMoi -> y + relY, angle);
     }
 
     void newRelativeFighter(long relX, long relY, float angle = 0){
@@ -962,6 +1069,9 @@ void* interactionThread(void* _){
             }
             delete clients[toKill];
             clients.erase(clients.begin() + toKill);
+        }
+        else if (command == "skip stage"){
+            counter = 1;
         }
     }
 }
