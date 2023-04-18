@@ -170,6 +170,12 @@
                     place: true
                 },
                 {
+                    name: "Fort",
+                    word: "F",
+                    cost: 120,
+                    place: true
+                },
+                {
                     name: "Extra Walls",
                     cbk: () => {
                         wallsTurn += 2;
@@ -421,6 +427,12 @@
                 }
                 if (myCastle) {
                     canPlaceWall = (Math.abs(mousePos.gameX - myCastle.x) < 400) && (Math.abs(mousePos.gameY - myCastle.y) < 400);
+                    mine.forEach(index => {
+                        object = objects[index];
+                        if (object.value == "F"){
+                            canPlaceWall = canPlaceWall || (Math.abs(mousePos.gameX - object.x) < 400) && (Math.abs(mousePos.gameY - object.y) < 400);
+                        }
+                    });
                 }
                 else {
                     canPlaceWall = false;
@@ -461,6 +473,10 @@
                             ctx.fillStyle = "lightgreen";
                         }
                         ctx.fillRect(object.x - 25, object.y - 25, 50, 50);
+                    }
+                    else if (object.value == "F"){
+                        ctx.fillStyle = "black";
+                        ctx.fillRect(object.x - 3, object.y - 3, 6, 6);
                     }
                     else if (object.value == "f"){
                         if (mine.indexOf(object.id) == -1){

@@ -169,18 +169,55 @@ struct GameObject {
 std::vector <GameObject*> objects;
 
 
-class CastleObject : public GameObject {
-    int lives = 3;
+class FortObject : public GameObject {
+public:
+    void destroy() {
+        rm = true;
+    }
+
     void update() {
 
+    }
+
+    Box box(){
+        return { x - 3, y - 3, x + 3, y + 3 };
+    }
+
+    char identify() {
+        return 'F';
+    }
+};
+
+
+class CastleObject : public GameObject {
+public:
+    std::vector<GameObject*> forts;
+    int lives = 3;
+    void update() {
+        for (size_t f = 0; f < forts.size(); f ++){
+            if (forts[f] -> rm){
+                forts.erase(forts.begin() + f);
+                f --;
+            }
+        }
     }
 
     void destroy () {
         lives --;
         if (lives <= 0){
-            rm = true;
-            if (hasLostCallback){
-                lostFunction(this);
+            if (forts.size() > 0) {
+                lives = 3;
+                x = forts[0] -> x;
+                y = forts[0] -> y;
+                forts[0] -> rm = true;
+                forts.erase(forts.begin());
+                broadcast((std::string)"M" + std::to_string(id) + " " + std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(angle));
+            }
+            else {
+                rm = true;
+                if (hasLostCallback){
+                    lostFunction(this);
+                }
             }
         }
     }
@@ -622,6 +659,17 @@ struct Client {
                         collect(-100);
                     }
                 }
+                else if (args[0] == "F"){
+                    if (score >= 120){
+                        FortObject* f = new FortObject;
+                        f -> x = std::stoi(args[1]);
+                        f -> y = std::stoi(args[2]);
+                        f -> goalX = f -> x;
+                        f -> goalY = f -> y;
+                        add(f);
+                        collect(-120);
+                    }
+                }
             }
             else if (command == 'm'){
                 for (GameObject* obj : myFighters){
@@ -734,6 +782,9 @@ struct Client {
         myFighters.push_back(thing);
         addObject(thing);
         sendText((std::string)"a" + std::to_string(thing -> id));
+        if (thing -> identify() == 'F'){
+            deMoi -> forts.push_back(thing);
+        }
     }
 
     template <typename FighterType>
@@ -775,6 +826,7 @@ struct Client {
         newRelativeFighter(-200, 0, PI);
         newRelativeFighter(0, 200);
         newRelativeFighter(0, -200);
+        newRelativeThing <FortObject>(400, 0);
         //newRelativeSniper(100, 0, PI/2);
         //newRelativeTiefighter(0, 100);
         //newRelativeTiefighter(0, -100, PI);
