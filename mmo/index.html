@@ -135,29 +135,33 @@
             var inventoryMode = false;
             var inventoryHovered = -1;
             var wallsTurn = 2;
-            var banners = [];
+            var banners = {};
             var inventoryPlace = undefined;
 
             var inventoryStuff = [
                 {
                     name: "Basic Fighter",
                     word: "f",
-                    cost: 10
+                    cost: 10,
+                    place: true
                 },
                 {
                     name: "Tie Fighter",
                     word: "t",
-                    cost: 20
+                    cost: 20,
+                    place: true
                 },
                 {
                     name: "Sniper",
                     word: "s",
-                    cost: 30
+                    cost: 30,
+                    place: true
                 },
                 {
                     name: "Hypersonic Missile",
                     word: "h",
-                    cost: 5
+                    cost: 5,
+                    place: true
                 },
                 {
                     name: "Turret",
@@ -268,7 +272,7 @@
                     }
                 }
                 else if (command == "b"){
-                    banners.push(args[0]);
+                    banners[args[0]] = args[1];
                 }
                 else if (command == "T"){
                     alert("Game over! It was a tie - nobody was left alive at the end. Pretty L, in my opinion.");

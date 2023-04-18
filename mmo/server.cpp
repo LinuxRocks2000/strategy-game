@@ -433,7 +433,6 @@ class WallObject : public GameObject {
 
 class TurretObject : public GameObject {
     double angleV = 0;
-    long TTL = 2000;
     int shootTimer = 20;
 
     char identify() {
@@ -441,11 +440,6 @@ class TurretObject : public GameObject {
     }
 
     void update() {
-        TTL --;
-        if (TTL < 0){
-            rm = true;
-            return;
-        }
         GameObject* closestShootah = NULL;
         double bestDistance = 500 * 500; // It won't seek ships more than 500 away
         double bestDx = 0;
@@ -538,7 +532,7 @@ struct Client {
                     is_authorized = true;
                     livePlayerCount ++;
                     banners.push_back(args[1]);
-                    broadcast((std::string)"b" + args[1]); // b = add banner
+                    broadcast((std::string)"b" + std::to_string(banners.size() - 1) + " " + args[1]); // b = add banner
                     myBanner = banners.size() - 1;
                     std::cout << "New banner " << args[1] << std::endl;
                 }
@@ -654,8 +648,8 @@ struct Client {
         for (GameObject* obj : objects){
             sendObject(obj);
         }
-        for (std::string banner : banners){
-            sendText((std::string)"b" + banner);
+        for (size_t banner = 0; banner < banners.size(); banner ++){
+            sendText((std::string)"b" + std::to_string(banner) + " " + banners[banner]);
         }
     }
 
@@ -877,6 +871,7 @@ void reset(){
     counter = 1;
     stratChangeMode = false;
     playing = false;
+    banners.clear();
 }
 
 void tick(){
@@ -1015,7 +1010,12 @@ void* interactionThread(void* _){
             std::cout << "--- Client and Castle information ---" << std::endl;
             for (size_t i = 0; i < clients.size(); i ++) {
                 Client* client = clients[i];
-                std::cout << "Client " << i << " owns a castle at (" << client -> deMoi -> x << ", " << client -> deMoi -> y << "), with banner " << client -> myBanner << " (sign " << banners[client -> myBanner] << ")." << std::endl;
+                if (client -> deMoi){
+                    std::cout << "Client " << i << " owns a castle at (" << client -> deMoi -> x << ", " << client -> deMoi -> y << "), with banner " << client -> myBanner << " (sign " << banners[client -> myBanner] << ")." << std::endl;
+                }
+                else {
+                    std::cout << "Client " << i << "(banner " << client -> myBanner << ", sign " << banners[client -> myBanner] << ") does not own a castle." << std::endl;
+                }
             }
             for (size_t i = 0; i < objects.size(); i ++) {
                 GameObject* obj = objects[i];
@@ -1052,7 +1052,7 @@ void* interactionThread(void* _){
             std::cout << "RESETTING SERVER" << std::endl;
             reset();
         }
-        else if (command == "quit"){
+        else if (command == "quit" || command == "exit"){
             std::cout << "Quitting." << std::endl;
             exit(0);
         }
@@ -1072,6 +1072,18 @@ void* interactionThread(void* _){
         }
         else if (command == "skip stage"){
             counter = 1;
+        }
+        else if (command == "clear unowned"){
+            for (size_t i = 0; i < objects.size(); i ++){
+                if (objects[i] -> owner == NULL){
+                    delete objects[i];
+                    objects.erase(objects.begin() + i);
+                    i --;
+                }
+            }
+        }
+        else {
+            std::cout << "Unrecognized command." << std::endl;
         }
     }
 }
