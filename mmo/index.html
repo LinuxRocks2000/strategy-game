@@ -426,10 +426,10 @@
                     return;
                 }
                 if (myCastle) {
-                    canPlaceWall = (Math.abs(mousePos.gameX - myCastle.x) < 400) && (Math.abs(mousePos.gameY - myCastle.y) < 400);
+                    canPlaceWall = (Math.abs(mousePos.gameX - myCastle.x) < 400) && (Math.abs(mousePos.gameY - myCastle.y) < 400) || inventoryPlace == "F";
                     mine.forEach(index => {
                         object = objects[index];
-                        if (object.value == "F"){
+                        if (object && object.value == "F"){
                             canPlaceWall = canPlaceWall || (Math.abs(mousePos.gameX - object.x) < 400) && (Math.abs(mousePos.gameY - object.y) < 400);
                         }
                     });
@@ -476,7 +476,7 @@
                     }
                     else if (object.value == "F"){
                         ctx.fillStyle = "black";
-                        ctx.fillRect(object.x - 3, object.y - 3, 6, 6);
+                        ctx.fillRect(object.x - 10, object.y - 10, 20, 20);
                     }
                     else if (object.value == "f"){
                         if (mine.indexOf(object.id) == -1){

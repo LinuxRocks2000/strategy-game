@@ -1,28 +1,25 @@
+#include "terminalstuff.hpp"
 #include "logo.h"
 #include <iostream>
 #include <unistd.h>
 #include <termios.h>
-#include <string>
+#include <fcntl.h>
 
 
-long numba = 0;
 int main(){
-    struct termios old_tio, new_tio;
-    tcgetattr(STDIN_FILENO, &old_tio);
-    new_tio = old_tio;
-    new_tio.c_lflag &= ~ICANON;
-    new_tio.c_lflag &= ~ECHO;
-    //new_tio.c_cc[VMIN] = 0;
-    new_tio.c_cc[VTIME] = 0;
-    tcsetattr(STDIN_FILENO,TCSANOW,&new_tio);
-    std::string curLine = "";
-    while (1) {
-        char c = getchar();
-        if (c != EOF){
-            curLine += c;
+    CleverTerminal prints;
+    prints.init(4);
+    prints.noncanonical();
+    prints[0] = "[ TEST ] OK";
+    prints[1] = "[ MORETEST ] WELL ITS FINE";
+    prints[2] = "[ FRIGGETY FRUCK ]";
+    prints[3] = "[ STUFF ] ";
+    while (true){
+        prints.update();
+        if (prints.hasLine()){
+            prints.printLn(">>> " + prints.getLine());
         }
-        std::cout << "\r>" << curLine;
-        usleep(1000);
+        usleep(10000);
     }
-	return 0;
+    return 0;
 }

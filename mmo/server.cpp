@@ -18,6 +18,8 @@
 #include <mutex>
 #include <functional>
 #include "logo.h"
+#include "terminalstuff.hpp"
+#include <signal.h>
 #define PI 3.141592
 #define FPS 30
 const float ALLOWED_MICROS_PER_FRAME = 1000000.f/FPS;
@@ -30,6 +32,7 @@ bool playing = false;
 unsigned long gameSize = 5000;
 long millisPerTick = 0;
 std::string serverName = "StrategyGameMMO";
+CleverTerminal terminal;
 
 std::vector<std::string> banners;
 
@@ -180,7 +183,7 @@ public:
     }
 
     Box box(){
-        return { x - 3, y - 3, x + 3, y + 3 };
+        return { x - 10, y - 10, x + 10, y + 10 };
     }
 
     char identify() {
@@ -563,7 +566,7 @@ struct Client {
         if (command == 'c'){
             if ((args[0] != "_spectator") && (!playing)){ // If the first argument (code) is not spectator mode, and we aren't playing.
                 if (args[0] == code){
-                    std::cout << "New player logged in with access code!" << std::endl;
+                    terminal.printLn("New player logged in with access code!");
                     sendText("s"); // SUCCESS
                     metadata();
                     is_authorized = true;
@@ -571,15 +574,15 @@ struct Client {
                     banners.push_back(args[1]);
                     broadcast((std::string)"b" + std::to_string(banners.size() - 1) + " " + args[1]); // b = add banner
                     myBanner = banners.size() - 1;
-                    std::cout << "New banner " << args[1] << std::endl;
+                    terminal.printLn("New banner " + args[1]);
                 }
                 else{
-                    std::cout << "Player failed to log in - has the wrong code?" << std::endl;
+                    terminal.printLn("Player failed to log in - has the wrong code?");
                     sendText("e0"); // ERROR 0 invalid code
                 }
             }
             else{
-                std::cout << "A spectator entered the arena!" << std::endl;
+                terminal.printLn("A spectator entered the arena!");
                 sendText("w0"); // WARNING 0 you are a spectator
                 metadata();
             }
@@ -595,7 +598,7 @@ struct Client {
                         fighters();
                     }
                     else{
-                        std::cout << "Some idiot just tried to hack this system" << std::endl;
+                        terminal.printLn("Some idiot just tried to hack this system");
                     }
                 }
                 else if (args[0] == "w"){
@@ -769,6 +772,16 @@ struct Client {
                         }
                     }
                     break;
+                case 'F':
+                    if (thing -> killer != NULL && thing -> killer -> owner != NULL){
+                        if (thing -> killer -> owner != this){
+                            thing -> killer -> owner -> collect(20);
+                        }
+                        if (thing -> owner){
+                            thing -> owner -> collect(-10);
+                        }
+                    }
+                    break;
             }
         }
     }
@@ -826,7 +839,6 @@ struct Client {
         newRelativeFighter(-200, 0, PI);
         newRelativeFighter(0, 200);
         newRelativeFighter(0, -200);
-        newRelativeThing <FortObject>(400, 0);
         //newRelativeSniper(100, 0, PI/2);
         //newRelativeTiefighter(0, 100);
         //newRelativeTiefighter(0, -100, PI);
@@ -943,14 +955,14 @@ void tick(){
                 cli -> sendText("E" + std::to_string(winningBanner)); // The game has ended, and the person identified by that banner one.
             }
         }
-        std::cout << "\033[32mThe game ended with a winner! Resetting.\033[0m" << std::endl;
+        terminal.printLn("\033[32mThe game ended with a winner! Resetting.\033[0m");
         reset();
     }
     else if (livePlayerCount == 0){
         for (Client* cli : clients){
             cli -> sendText("T"); // The game was a tie.
         }
-        std::cout << "\033[33mThe game ended with a tie. Resetting.\033[0m" << std::endl;
+        terminal.printLn("\033[33mThe game ended with a tie. Resetting.\033[0m");
         reset();
     }
     counter --;
@@ -987,7 +999,7 @@ void tick(){
                 if (objects[x] -> box().check(objects[y] -> box())){
                     char xWord = objects[x] -> identify();
                     char yWord = objects[y] -> identify();
-                    if (xWord == 'c'){
+                    if (xWord == 'c' || xWord == 'F'){
                         // If the collision root object is a castle
                         if ((yWord == 'b') || (yWord == 'h')) {
                             collided = true;
@@ -999,7 +1011,7 @@ void tick(){
                         collided = true;
                     }
                     else if (xWord == 'w'){
-                        if (yWord != 'c'){
+                        if (yWord != 'c' && yWord != 'F'){
                             collided = true;
                         }
                     }
@@ -1028,116 +1040,138 @@ void tick(){
 
 bool isPasswordChange = false;
 
+
 void* interactionThread(void* _){
+    terminal.init(6);
+    terminal.noncanonical();
+    int terminalMode = 0;
+    terminal.prompt = ": ";
     while (true){
-        std::string command;
-        std::cout << "> " << std::flush;
-        std::getline(std::cin, command);
-        if (command == "start"){
-            std::cout << "Starting game." << std::endl;
-            for (int x = 0; x < livePlayerCount * 5; x ++){
-                randomObject();
-            }
-            playing = true;
-        }
-        else if (command == "change password"){
-            isPasswordChange = true;
-            std::cout << "\033[4mEnter the new passcode\033[0m" << std::endl;
-            std::getline(std::cin, command);
-            free(code);
-            code = (char*)malloc(command.size() + 1);
-            for (size_t i = 0; i < command.size(); i ++){
-                code[i] = command[i];
-            }
-            code[command.size()] = 0;
-            std::cout << "Password changed to " << code << std::endl;
-            isPasswordChange = false;
-        }
-        else if (command == "data"){
-            std::cout << (std::string)"\033[34mLiving players: \033[0m\033[1m" + std::to_string(livePlayerCount) + "\033[0m" << std::endl;
-            std::cout << (std::string)"\033[33mTotal clients: \033[0m\033[1m" + std::to_string(clients.size()) + "\033[0m" << std::endl;
-            std::cout << (std::string)"\033[32mSpectators: \033[0m\033[1m" + std::to_string(clients.size() - livePlayerCount) + "\033[0m" << std::endl;
-            std::cout << (std::string)"\033[91mTotal object count: \033[0m\033[1m" + std::to_string(objects.size()) + "\033[0m" << std::endl;
-            std::map <char, long> breakdown;
-            std::cout << "--- Client and Castle information ---" << std::endl;
-            for (size_t i = 0; i < clients.size(); i ++) {
-                Client* client = clients[i];
-                if (client -> deMoi){
-                    std::cout << "Client " << i << " owns a castle at (" << client -> deMoi -> x << ", " << client -> deMoi -> y << "), with banner " << client -> myBanner << " (sign " << banners[client -> myBanner] << ")." << std::endl;
+        terminal[0] = (std::string)"\033[34m[ Living players] \033[0m\033[1m" + std::to_string(livePlayerCount) + "\033[0m";
+        terminal[1] = (std::string)"\033[33m[ Total clients] \033[0m\033[1m" + std::to_string(clients.size()) + "\033[0m";
+        terminal[2] = (std::string)"\033[32m[ Spectators] \033[0m\033[1m" + std::to_string(clients.size() - livePlayerCount) + "\033[0m";
+        terminal[3] = (std::string)"\033[91m[ Total object count] \033[0m\033[1m" + std::to_string(objects.size()) + "\033[0m";
+        terminal[4] = (std::string)"[ Current Game Size ] " + std::to_string(gameSize);
+        terminal[5] = (std::string)"\033[36m[ Password ] \033[0m\033[1m" + code + "\033[0m";
+        terminal.update();
+        if (terminal.hasLine()){
+            std::string command = terminal.getLine();
+            if (terminalMode == 0){
+                if (command == "start"){
+                    terminal.printLn("\033[1mStarting game.\033[0m");
+                    for (int x = 0; x < livePlayerCount * 5; x ++){
+                        randomObject();
+                    }
+                    playing = true;
+                }
+                else if (command == "exit" || command == "quit"){
+                    break;
+                }
+                else if (command == "change password"){
+                    terminalMode = 1;
+                    terminal.prompt = "Enter new password: ";
+                }
+                else if (command == "data"){
+                    std::map <char, long> breakdown;
+                    terminal.printLn("--- Client and Castle information ---");
+                    for (size_t i = 0; i < clients.size(); i ++) {
+                        Client* client = clients[i];
+                        if (client -> deMoi){
+                            terminal.printLn("Client " + std::to_string(i) + " owns a castle at (" + std::to_string(client -> deMoi -> x) + ", " + std::to_string(client -> deMoi -> y) + "), with banner " + std::to_string(client -> myBanner) + " (sign " + banners[client -> myBanner] + ")." );
+                        }
+                        else {
+                            terminal.printLn("Client " + std::to_string(i) + " (banner " + std::to_string(client -> myBanner) + ", sign " + banners[client -> myBanner] + ") does not own a castle.");
+                        }
+                    }
+                    for (size_t i = 0; i < objects.size(); i ++) {
+                        GameObject* obj = objects[i];
+                        char sign = obj -> identify();
+                        if (breakdown.contains(sign)){
+                            breakdown[sign] ++;
+                        }
+                        else{
+                            breakdown[sign] = 1;
+                        }
+                    }
+                    terminal.printLn("--- Breakdown of objects by callsign (c = Castle, f = Fighter, t = Tiefighter, s = Sniper, b = Bullet, w = Wall, C = chest) ---");
+                    for (std::pair<const char, long>& object : breakdown){
+                        terminal.printLn(object.first + ": " + object.second );
+                    }
+                }
+                else if (command == "broadcast"){
+                    terminal.prompt = "Enter message to broadcast: ";
+                    terminalMode = 2;
+                }
+                else if (command == "resize"){
+                    terminalMode = 3;
+                    terminal.prompt = "Enter the new size of the game board: ";
+                }
+                else if (command == "reset"){
+                    reset();
+                    terminal.printLn("### SERVER RESET ###");
+                }
+                else if (command == "clear unowned"){
+                    for (size_t i = 0; i < objects.size(); i ++){
+                        if (objects[i] -> owner == NULL){
+                            delete objects[i];
+                            objects.erase(objects.begin() + i);
+                            i --;
+                        }
+                    }
+                }
+                else if (command == "skip stage"){
+                    counter = 1;
+                }
+                else if (command == "drop client"){
+                    terminal.prompt = "Enter client number to drop: ";
+                    terminalMode = 4;
                 }
                 else {
-                    std::cout << "Client " << i << "(banner " << client -> myBanner << ", sign " << banners[client -> myBanner] << ") does not own a castle." << std::endl;
+                    terminal.printLn("\033[31mUnrecognized command!\033[0m");
                 }
             }
-            for (size_t i = 0; i < objects.size(); i ++) {
-                GameObject* obj = objects[i];
-                char sign = obj -> identify();
-                if (breakdown.contains(sign)){
-                    breakdown[sign] ++;
+            else if (terminalMode == 1){
+                free(code);
+                code = (char*)malloc(command.size() + 1);
+                for (size_t i = 0; i < command.size(); i ++){
+                    code[i] = command[i];
                 }
-                else{
-                    breakdown[sign] = 1;
+                code[command.size()] = 0;
+                terminalMode = 0;
+                terminal.prompt = ": ";
+            }
+            else if (terminalMode == 2){
+                broadcast("B" + command);
+                terminal.prompt = ": ";
+                terminalMode = 0;
+            }
+            else if (terminalMode == 3){
+                gameSize = std::stoi(command);
+                for (Client* cli : clients){
+                    cli -> metadata(); // metadata changed - rebroadcast
                 }
+                terminalMode = 0;
+                terminal.prompt = ": ";
             }
-            std::cout << "--- Breakdown of objects by callsign (c = Castle, f = Fighter, t = Tiefighter, s = Sniper, b = Bullet, w = Wall, C = chest) ---" << std::endl;
-            for (std::pair<const char, long>& object : breakdown){
-                std::cout << object.first << ": " << object.second << std::endl;
-            }
-            std::cout << "--- Current game size: " << gameSize << " ---" << std::endl;
-            std::cout << std::endl;
-            std::cout << "\033[36mPassword: \033[0m\033[1m" << code << "\033[0m" << std::endl;
-        }
-        else if (command == "broadcast"){
-            std::cout << "\033[4mEnter the message to broadcast\033[0m" << std::endl;
-            std::getline(std::cin, command);
-            broadcast("B" + command);
-        }
-        else if (command == "resize") {
-            std::cout << "\033[4mEnter the new gameboard size\033[0m" << std::endl;
-            std::getline(std::cin, command);
-            gameSize = std::stoi(command);
-            for (Client* cli : clients){
-                cli -> metadata(); // metadata changed - rebroadcast
-            }
-        }
-        else if (command == "reset"){
-            std::cout << "RESETTING SERVER" << std::endl;
-            reset();
-        }
-        else if (command == "quit" || command == "exit"){
-            std::cout << "Quitting." << std::endl;
-            exit(0);
-        }
-        else if (command == "drop client"){
-            std::cout << "\033[4mEnter the number of the client to drop (Be very careful! This will delete the client and everything they own on the board!)\033[0m" << std::endl;
-            std::getline(std::cin, command);
-            size_t toKill = std::stoi(command);
-            for (size_t i = 0; i < objects.size(); i ++){
-                if (objects[i] -> owner == clients[toKill]){
-                    delete objects[i];
-                    objects.erase(objects.begin() + i);
-                    i --;
+            else if (terminalMode == 4){
+                size_t toKill = std::stoi(command);
+                for (size_t i = 0; i < objects.size(); i ++){
+                    if (objects[i] -> owner == clients[toKill]){
+                        delete objects[i];
+                        objects.erase(objects.begin() + i);
+                        i --;
+                    }
                 }
-            }
-            delete clients[toKill];
-            clients.erase(clients.begin() + toKill);
-        }
-        else if (command == "skip stage"){
-            counter = 1;
-        }
-        else if (command == "clear unowned"){
-            for (size_t i = 0; i < objects.size(); i ++){
-                if (objects[i] -> owner == NULL){
-                    delete objects[i];
-                    objects.erase(objects.begin() + i);
-                    i --;
-                }
+                delete clients[toKill];
+                clients.erase(clients.begin() + toKill);
+                terminalMode = 0;
+                terminal.prompt = ": ";
             }
         }
-        else {
-            std::cout << "Unrecognized command." << std::endl;
-        }
+        usleep(50000); // 20 hertz update rate - shouldn't murder my computer
     }
+    terminal.canonical();
+    exit(1);
 }
 
 void* mainthread(void* _){
@@ -1229,7 +1263,7 @@ int main(int argc, char** argv){
                 delete clients[x];
                 clients.erase(clients.begin() + x);
                 x --;
-                std::cout << "Dropped client." << std::endl;
+                terminal.printLn("Dropped client.");
             }
         }
         clientListMutex.unlock();
