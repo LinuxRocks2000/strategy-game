@@ -58,9 +58,16 @@
                 color: red;
                 text-align: center;
             }
+            #enableNotifs{
+                font-size: 3em;
+                position: absolute;
+                bottom: 0px;
+                right: 0px;
+            }
         </style>
     </head>
     <body>
+        <button id="enableNotifs" style="display: none;">Click To Enable Notifications</button>
         <div id="mainscreen">
             <div id="menu">
                 Banner (one word only - anything after a space will be ignored; this helps other players identify who's shooting at them and who won):<input type="text" id="banner" /><br />
@@ -139,6 +146,22 @@
             var inventoryPlace = undefined;
             var timeToStart = -1;
             var canPlaceCastle = false;
+            var sendNotifs = false;
+            var isFirstTick = true;
+            document.getElementById("enableNotifs").onclick = () => {
+                Notification.requestPermission().then((permission) => {
+                    if (permission === "granted") {
+                        sendNotifs = true;
+                    }
+                });
+                document.getElementById("enableNotifs").style.display = "none";
+            };
+            if (Notification.permission === "granted") {
+                sendNotifs = true;
+            }
+            else {
+                document.getElementById("enableNotifs").style.display = "";
+            }
 
             var inventoryStuff = [
                 {
@@ -271,6 +294,11 @@
                     }
                 }
                 else if (command == "!"){
+                    if (timeToStart == -1) {
+                        if (!document.hasFocus() && sendNotifs){
+                            const notification = new Notification("Countdown started!");
+                        }
+                    }
                     timeToStart = args[0];
                 }
                 else if (command == "e"){
@@ -329,6 +357,12 @@
                 }
                 else if (command == "t"){
                     counter = args[0] - 0;
+                    if (isFirstTick){
+                        if (!document.hasFocus() && sendNotifs) {
+                            const notification = new Notification("Game started!");
+                        }
+                    }
+                    isFirstTick = false;
                     if (args[1] == "1"){
                         isStratChange = true;
                         if (wasPlayMode){

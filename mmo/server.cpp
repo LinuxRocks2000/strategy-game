@@ -956,12 +956,12 @@ void tick(){
     if (isAutonomous){
         if (livePlayerCount > 1){
             autonomousTimer ++;
-        }
-        if (autonomousTimer == autonomousStartTimer){
-            start();
-        }
-        else if (autonomousTimer < autonomousStartTimer){
-            broadcast("!" + std::to_string(autonomousStartTimer - autonomousTimer));
+            if (autonomousTimer == autonomousStartTimer){
+                start();
+            }
+            else if (autonomousTimer < autonomousStartTimer){
+                broadcast("!" + std::to_string(autonomousStartTimer - autonomousTimer));
+            }
         }
     }
     if (!playing){
