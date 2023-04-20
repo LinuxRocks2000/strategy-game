@@ -34,6 +34,11 @@ long millisPerTick = 0;
 std::string serverName = "StrategyGameMMO";
 CleverTerminal terminal;
 
+bool isAutonomous = false;
+int autonomousMaxPlayers = 0;
+int autonomousStartTimer = 0;
+int autonomousTimer = 0;
+
 std::vector<std::string> banners;
 
 void broadcast(std::string broadcast);
@@ -564,7 +569,7 @@ struct Client {
         std::vector<std::string> args = splitString(message.substr(1, message.size() - 1), ' ');
         processingMutex.lock();
         if (command == 'c'){
-            if ((args[0] != "_spectator") && (!playing)){ // If the first argument (code) is not spectator mode, and we aren't playing.
+            if ((!isAutonomous || (livePlayerCount < autonomousMaxPlayers)) && (args[0] != "_spectator") && (!playing)){ // If it's not autonomous OR the current player count is under max AND the first argument (code) is not spectator mode, and we aren't playing.
                 if (args[0] == code){
                     terminal.printLn("New player logged in with access code!");
                     sendText("s"); // SUCCESS
@@ -936,9 +941,29 @@ void reset(){
     stratChangeMode = false;
     playing = false;
     banners.clear();
+    autonomousTimer = 0;
+}
+
+void start() {
+    terminal.printLn("\033[1mStarting game.\033[0m");
+    for (int x = 0; x < livePlayerCount * 5; x ++){
+        randomObject();
+    }
+    playing = true;
 }
 
 void tick(){
+    if (isAutonomous){
+        if (livePlayerCount > 1){
+            autonomousTimer ++;
+        }
+        if (autonomousTimer == autonomousStartTimer){
+            start();
+        }
+        else if (autonomousTimer < autonomousStartTimer){
+            broadcast("!" + std::to_string(autonomousStartTimer - autonomousTimer));
+        }
+    }
     if (!playing){
         return;
     }
@@ -1058,11 +1083,7 @@ void* interactionThread(void* _){
             std::string command = terminal.getLine();
             if (terminalMode == 0){
                 if (command == "start"){
-                    terminal.printLn("\033[1mStarting game.\033[0m");
-                    for (int x = 0; x < livePlayerCount * 5; x ++){
-                        randomObject();
-                    }
-                    playing = true;
+                    start();
                 }
                 else if (command == "exit" || command == "quit"){
                     break;
@@ -1095,7 +1116,8 @@ void* interactionThread(void* _){
                     }
                     terminal.printLn("--- Breakdown of objects by callsign (c = Castle, f = Fighter, t = Tiefighter, s = Sniper, b = Bullet, w = Wall, C = chest) ---");
                     for (std::pair<const char, long>& object : breakdown){
-                        terminal.printLn(object.first + ": " + object.second );
+                        //terminal.printLn("I hope mabel is ok :(");
+                        terminal.printLn(object.first + (std::string)": " + std::to_string(object.second));
                     }
                 }
                 else if (command == "broadcast"){
@@ -1125,6 +1147,10 @@ void* interactionThread(void* _){
                 else if (command == "drop client"){
                     terminal.prompt = "Enter client number to drop: ";
                     terminalMode = 4;
+                }
+                else if (command == "autonomous"){
+                    terminal.prompt = "Enter autonomous configuration in format <max players>+<tick times to join>: ";
+                    terminalMode = 5;
                 }
                 else {
                     terminal.printLn("\033[31mUnrecognized command!\033[0m");
@@ -1164,6 +1190,20 @@ void* interactionThread(void* _){
                 }
                 delete clients[toKill];
                 clients.erase(clients.begin() + toKill);
+                terminalMode = 0;
+                terminal.prompt = ": ";
+            }
+            else if (terminalMode == 5){
+                std::vector<std::string> autoInfo = splitString(command, '+');
+                if (autoInfo.size() == 2){
+                    isAutonomous = true;
+                    autonomousMaxPlayers = std::stoi(autoInfo[0]);
+                    autonomousStartTimer = std::stoi(autoInfo[1]);
+                    terminal.printLn("Succesfully configured the server to autonomously begin play " + autoInfo[1] + " ticks after the minimum 2 players (non-negotiable) have connected. Maximum number of players has been set to " + autoInfo[0] + ".");
+                }
+                else {
+                    terminal.printErr("Invalid arguments to autonomous!");
+                }
                 terminalMode = 0;
                 terminal.prompt = ": ";
             }

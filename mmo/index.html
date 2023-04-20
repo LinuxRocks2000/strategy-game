@@ -137,6 +137,8 @@
             var wallsTurn = 2;
             var banners = {};
             var inventoryPlace = undefined;
+            var timeToStart = -1;
+            var canPlaceCastle = false;
 
             var inventoryStuff = [
                 {
@@ -267,6 +269,9 @@
                         playing = true;
                         play();
                     }
+                }
+                else if (command == "!"){
+                    timeToStart = args[0];
                 }
                 else if (command == "e"){
                     if (mode == 1 && args[0] == 0){
@@ -437,6 +442,17 @@
                 else {
                     canPlaceWall = false;
                 }
+                canPlaceCastle = true;
+                Object.values(objects).forEach(object => {
+                    if (object){
+                        if (mousePos.gameX > object.x - 600 &&
+                            mousePos.gameX < object.x + 600 &&
+                            mousePos.gameY > object.y - 600 &&
+                            mousePos.gameY < object.y + 600) {
+                            canPlaceCastle = false;
+                        }
+                    }
+                });
                 mousePos.gameX = mousePos.realX + cX;
                 mousePos.gameY = mousePos.realY + cY;
                 if (mousePos.gameX > gameSize) {
@@ -733,9 +749,15 @@
                     ctx.font = "bold 40px monospace";
                     if (didSelectHome){
                         if (counter == 0){
-                            ctx.fillText("Waiting for game start...", window.innerWidth/2, 100);
+                            if (timeToStart == -1){
+                                ctx.fillText("Waiting for game start...", window.innerWidth/2, 100);
+                            }
+                            else {
+                                ctx.fillText("Game will start in " + timeToStart, window.innerWidth / 2, 100);
+                            }
                         }
                         else if (isStratChange){
+                            timeToStart = -1;
                             if (inventoryPlace) {
                                 ctx.fillStyle = "red";
                                 ctx.textAlign = "center";
@@ -754,7 +776,28 @@
                         }
                     }
                     else{
-                        ctx.fillText("Select Your Home Castle", window.innerWidth/2, 100);
+                        if (canPlaceCastle){
+                            ctx.fillText("Select Your Home Castle", window.innerWidth/2, 100);
+                        }
+                        else{
+                            ctx.fillText("Can't place a castle here!", window.innerWidth / 2, 100);
+                        }
+                    }
+                }
+                else{
+                    ctx.fillStyle = "red";
+                    ctx.textAlign = "center";
+                    ctx.font = "bold 40px monospace";
+                    if (counter == 0) {
+                        if (timeToStart == -1) {
+                            ctx.fillText("You are a spectator. Waiting for game start...", window.innerWidth / 2, 100);
+                        }
+                        else {
+                            ctx.fillText("You are a spectator. Game will start in " + timeToStart, window.innerWidth / 2, 100);
+                        }
+                    }
+                    else{
+                        ctx.fillText("You are a spectator!", window.innerWidth/2, 100);
                     }
                 }
                 ctx.font = "16px sans-serif";
@@ -816,8 +859,10 @@
                         }
                     }
                     else {
-                        connection.send("pc " + mousePos.gameX + " " + mousePos.gameY); // place castle at position
-                        didSelectHome = true;
+                        if (canPlaceCastle){
+                            connection.send("pc " + mousePos.gameX + " " + mousePos.gameY); // place castle at position
+                            didSelectHome = true;
+                        }
                     }
                 });
                 

@@ -29,6 +29,10 @@ public:
         needsUpdate = true;
     }
 
+    void printErr(std::string line){
+        printLn("\033[91mERROR: " + line + "\033[0m");
+    }
+
     void init(int numHeadLines){
         inited = true;
         for (size_t i = 0; i < numHeadLines; i ++){
