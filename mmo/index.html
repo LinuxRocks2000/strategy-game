@@ -39,6 +39,7 @@
                 position: absolute;
                 top: 0px;
                 left: 0px;
+                /*filter: blur(1px) brightness(75%);*/
             }
             ul {
                 text-align: left;
@@ -52,9 +53,8 @@
                 position: absolute;
                 top: 0px;
                 left: 0px;
-                width: 10vw;
-                height: 10vh;
-                background-color: black;
+                padding: 50px;
+                background-color: #111111;
                 color: red;
                 text-align: center;
             }
@@ -148,6 +148,8 @@
             var canPlaceCastle = false;
             var sendNotifs = false;
             var isFirstTick = true;
+            var effect = "none";
+            var CRTEffectWipe = 0;
             document.getElementById("enableNotifs").onclick = () => {
                 Notification.requestPermission().then((permission) => {
                     if (permission === "granted") {
@@ -161,6 +163,12 @@
             }
             else {
                 document.getElementById("enableNotifs").style.display = "";
+            }
+
+            function styleInfotextMajor(){
+                ctx.fillStyle = "green";
+                ctx.textAlign = "center";
+                ctx.font = "bold 40px monospace";
             }
 
             var inventoryStuff = [
@@ -427,13 +435,11 @@
 
             function mainloop(){
                 requestAnimationFrame(mainloop);
-                ctx.fillStyle = "white";
+                ctx.fillStyle = "black";
                 ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
                 inventoryHovered = -1;
                 if (inventoryMode) {
-                    ctx.fillStyle = "red";
-                    ctx.textAlign = "center";
-                    ctx.font = "bold 40px monospace";
+                    styleInfotextMajor();
                     ctx.fillText("Inventory", window.innerWidth / 2, 100);
                     var columnCount = Math.floor(window.innerWidth / 200);
                     for (var i = 0; i < inventoryStuff.length; i ++){
@@ -441,18 +447,16 @@
                         var y = 2 + Math.floor(i / columnCount);
                         x *= 200;
                         y *= 100;
-                        ctx.fillStyle = "black";
+                        ctx.fillStyle = "white";
                         ctx.font = "12px monospace";
                         ctx.fillText(inventoryStuff[i].name, x + 100, y + 20);
                         ctx.fillText(inventoryStuff[i].cost, x + 100, y + 80);
+                        styleInfotextMajor();
+                        ctx.font = "12px monospace";
                         if (score >= inventoryStuff[i].cost){
-                            ctx.fillStyle = "green";
-                            ctx.font = "bold 12px sans-serif";
                             ctx.fillText("[ CLICK TO BUY ]", x + 100, y + 50);
                         }
                         else {
-                            ctx.fillStyle = "red";
-                            ctx.font = "bold 12px sans-serif";
                             ctx.fillText("[ INSUFFICIENT SCORE ]", x + 100, y + 50);
                         }
                         if ((mousePos.realX > x) && (mousePos.realX < x + 200) && (mousePos.realY > y) && (mousePos.realY < y + 100)) {
@@ -505,7 +509,7 @@
                 ctx.translate(-cX, -cY);
 
                 ctx.strokeStyle = "black";
-                ctx.fillStyle = "lightblue";
+                ctx.fillStyle = "#555555";
                 ctx.lineWidth = 10;
                 ctx.strokeRect(0, 0, gameSize, gameSize);
                 ctx.fillRect(0, 0, gameSize, gameSize);
@@ -778,9 +782,7 @@
                     cY = gameSize - window.innerHeight/2;
                 }
                 if (playing){
-                    ctx.fillStyle = "red";
-                    ctx.textAlign = "center";
-                    ctx.font = "bold 40px monospace";
+                    styleInfotextMajor();
                     if (didSelectHome){
                         if (counter == 0){
                             if (timeToStart == -1){
@@ -793,9 +795,6 @@
                         else if (isStratChange){
                             timeToStart = -1;
                             if (inventoryPlace) {
-                                ctx.fillStyle = "red";
-                                ctx.textAlign = "center";
-                                ctx.font = "bold 40px monospace";
                                 if (canPlaceWall){
                                     ctx.fillText("Place your new gamepiece...", window.innerWidth / 2, 100);
                                 }
@@ -819,9 +818,6 @@
                     }
                 }
                 else{
-                    ctx.fillStyle = "red";
-                    ctx.textAlign = "center";
-                    ctx.font = "bold 40px monospace";
                     if (counter == 0) {
                         if (timeToStart == -1) {
                             ctx.fillText("You are a spectator. Waiting for game start...", window.innerWidth / 2, 100);
@@ -835,17 +831,31 @@
                     }
                 }
                 ctx.font = "16px sans-serif";
-                ctx.fillStyle = "black";
+                ctx.fillStyle = "white";
                 ctx.textAlign = "left";
                 ctx.fillText(score, 50, 50);
-                ctx.fillStyle = "purple";
+                ctx.fillStyle = "green";
                 ctx.fillText("Time Left in " + (isStratChange ? "strategy mode" : "play mode") + ": " + counter, 50, 100);
                 if (wallsRemaining > 0){
                     ctx.textAlign = "right";
                     if (!canPlaceWall){
-                        ctx.fillStyle = "red";
+                        //ctx.fillStyle = "red";
                     }
                     ctx.fillText("Remaining walls (" + (canPlaceWall ? "press W to place one!" : "can't place here!") + "): " + wallsRemaining, window.innerWidth - 50, 50);
+                }
+                if (effect == "CRT"){
+                    ctx.beginPath();
+                    ctx.strokeStyle = "darkgrey";
+                    ctx.lineWidth = 0.5;
+                    const lineCount = 100;
+                    for (var y = 0; y < lineCount; y ++){
+                        var linePos = y * window.innerHeight/lineCount;
+                        linePos += CRTEffectWipe % (window.innerHeight/lineCount);
+                        CRTEffectWipe += 0.01;
+                        ctx.moveTo(0, linePos);
+                        ctx.lineTo(window.innerWidth, linePos);
+                    }
+                    ctx.stroke();
                 }
             }
 

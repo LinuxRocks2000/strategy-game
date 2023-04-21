@@ -114,6 +114,16 @@ struct Box {
 };
 
 
+bool listContains(std::vector<auto> list, auto item) {
+    for (auto& thing : list){
+        if (thing == item){
+            return true;
+        }
+    }
+    return false;
+}
+
+
 struct Client;
 
 
@@ -576,6 +586,9 @@ struct Client {
                     metadata();
                     is_authorized = true;
                     livePlayerCount ++;
+                    while (listContains(banners, args[1])){
+                        args[1] += ".copy";
+                    }
                     banners.push_back(args[1]);
                     broadcast((std::string)"b" + std::to_string(banners.size() - 1) + " " + args[1]); // b = add banner
                     myBanner = banners.size() - 1;
