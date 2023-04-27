@@ -128,6 +128,9 @@ struct Client;
 
 
 struct GameObject {
+    double health = 1;
+    double damage = 1;
+
     long banner = -1;
 
     static unsigned long topId;
@@ -209,8 +212,11 @@ public:
 
 class CastleObject : public GameObject {
 public:
+    CastleObject(){
+        health = 3;
+    }
+
     std::vector<GameObject*> forts;
-    int lives = 3;
     void update() {
         for (size_t f = 0; f < forts.size(); f ++){
             if (forts[f] -> rm){
@@ -221,21 +227,17 @@ public:
     }
 
     void destroy () {
-        lives --;
-        if (lives <= 0){
-            if (forts.size() > 0) {
-                lives = 3;
-                x = forts[0] -> x;
-                y = forts[0] -> y;
-                forts[0] -> rm = true;
-                forts.erase(forts.begin());
-                broadcast((std::string)"M" + std::to_string(id) + " " + std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(angle));
-            }
-            else {
-                rm = true;
-                if (hasLostCallback){
-                    lostFunction(this);
-                }
+        if (forts.size() > 0) {
+            x = forts[0] -> x;
+            y = forts[0] -> y;
+            forts[0] -> rm = true;
+            forts.erase(forts.begin());
+            broadcast((std::string)"M" + std::to_string(id) + " " + std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(angle));
+        }
+        else {
+            rm = true;
+            if (hasLostCallback){
+                lostFunction(this);
             }
         }
     }
@@ -455,20 +457,12 @@ public:
 
 
 class WallObject : public GameObject {
-    int lives = 2;
-    
+public:
+    WallObject() {
+        health = 2;
+    }
     char identify() {
         return 'w';
-    }
-
-    void destroy(){
-        lives --;
-        if (lives <= 0){
-            rm = true;
-            if (hasLostCallback){
-                lostFunction(this);
-            }
-        }
     }
 
     int TTL = 600;
@@ -1007,7 +1001,7 @@ void tick(){
     if (counter == 0){
         stratChangeMode = !stratChangeMode;
         if (stratChangeMode){
-            counter = FPS * 30; // 30 seconds in strat change mode
+            counter = FPS * 40; // 30 seconds in strat change mode
         }
         else{
             counter = FPS * 20; // For every 20 seconds of play. oooh this gon' be funnnnn
@@ -1063,10 +1057,16 @@ void tick(){
                     }
                 }
                 if (collided){
-                    objects[y] -> killer = objects[x];
-                    objects[x] -> killer = objects[y];
-                    objects[y] -> destroy();
-                    objects[x] -> destroy();
+                    objects[y] -> health -= objects[x] -> damage;
+                    objects[x] -> health -= objects[y] -> damage;
+                    if (objects[y] -> health <= 0){
+                        objects[y] -> killer = objects[x];
+                        objects[y] -> destroy();
+                    }
+                    if (objects[x] -> health <= 0){
+                        objects[x] -> killer = objects[y];
+                        objects[x] -> destroy();
+                    }
                 }
             }
         }
@@ -1297,6 +1297,11 @@ int main(int argc, char** argv){
     webserver.loglevel(crow::LogLevel::Warning);
     CROW_ROUTE(webserver, "/")([](const crow::request& req, crow::response& res){
         res.set_static_file_info("index.html");
+        res.end();
+    });
+    CROW_ROUTE(webserver, "/images/<path>")([](const crow::request& req, crow::response& res, std::string path){
+        res.set_static_file_info("images/" + path);
+        terminal.printLn("images/" + path);
         res.end();
     });
     CROW_ROUTE(webserver, "/game").websocket().onopen([](crow::websocket::connection& conn){

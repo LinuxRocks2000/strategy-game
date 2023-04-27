@@ -39,7 +39,6 @@
                 position: absolute;
                 top: 0px;
                 left: 0px;
-                /*filter: blur(1px) brightness(75%);*/
             }
             ul {
                 text-align: left;
@@ -64,7 +63,13 @@
                 bottom: 0px;
                 right: 0px;
             }
+            .preload_img {
+                display: none;
+            }
         </style>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@800&family=Roboto&display=swap" rel="stylesheet">
     </head>
     <body>
         <button id="enableNotifs" style="display: none;">Click To Enable Notifications</button>
@@ -99,13 +104,74 @@
                 <li>Hypersonic Missiles: Tiny ships with a similar design to enemies in the original Strategy Game: a small circle with a line extending well beyond it indicating direction. They don't shoot, but they move fast - good for dueling, because of how wide an area their swoops cover. Cost 5 points in the inventory (and they're barely worth it. Scutting little monsters.)</li>
             </ul>
         </div>
+        <img class="preload_img" id="basic_fighter_img_enemy" src="images/Fighter_enemy.svg" />
+        <img class="preload_img" id="basic_fighter_img_mine" src="images/Fighter_mine.svg" />
+        <img class="preload_img" id="sniper_img_enemy" src="images/Sniper_enemy.svg" />
+        <img class="preload_img" id="sniper_img_mine" src="images/Sniper_mine.svg" />
+        <img class="preload_img" id="tie_fighter_img_enemy" src="images/Tie_fighter_enemy.svg" />
+        <img class="preload_img" id="tie_fighter_img_mine" src="images/Tie_fighter_mine.svg" />
+        <img class="preload_img" id="turret_img_enemy" src="images/Turret_enemy.svg" />
+        <img class="preload_img" id="turret_img_mine" src="images/Turret_mine.svg" />
+        <img class="preload_img" id="missile_img_enemy" src="images/Missile_enemy.svg" />
+        <img class="preload_img" id="missile_img_mine" src="images/Missile_mine.svg" />
+        <img class="preload_img" id="fort_img_enemy" src="images/Fort_enemy.svg" />
+        <img class="preload_img" id="fort_img_mine" src="images/Fort_mine.svg" />
+        <img class="preload_img" id="wall_img" src="images/wall.svg" />
+        <img class="preload_img" id="friendly_wall_img" src="images/Extra_wall_friendly.svg" />
+        <img class="preload_img" id="not_connected" src="images/notConnectedIndicator.svg" />
+        <img class="preload_img" id="connected" src="images/connectedIndicator.svg" />
+        <img class="preload_img" id="error" src="images/error.svg" />
+        <img class="preload_img" id="info" src="images/info.svg" />
         <canvas id="game" style="display: none;">
 
         </canvas>
         <div id="notConnected">Not Connected!<br>Reload the page.</div>
         <script>
+            const PI = Math.PI;
+            function coterminal(angle, about = PI * 2){
+                while (angle < 0) {
+                    angle += about;
+                }
+                while (angle >= about) {
+                    angle -= about;
+                }
+                return angle;
+            }
+
+            function errorify(one, two, about = PI * 2) {
+                one = coterminal(one, about);
+                two = coterminal(two, about);
+                var error = coterminal(two - one, about);
+                if (error < PI) {
+                    error = error - PI * 2;
+                }
+                return error;
+            }
             var canvas = document.getElementById("game");
             var ctx = canvas.getContext("2d");
+
+            //ctx.oldDrawImage = ctx.drawImage;
+            //ctx.drawImage = function (image, x, y, w, h) {
+                //x = Math.round(x);
+                //y = Math.round(y);
+                //w = Math.round(w);
+                //h = Math.round(h);
+                //this.oldDrawImage(image, x, y, w, h);
+            //};
+
+            ctx.makeRoundRect = function (x, y, width, height, rx, ry) { // Stolen from #platformer
+                this.translate(x, y);
+                this.moveTo(rx, 0);
+                this.lineTo(width - rx, 0);
+                this.quadraticCurveTo(width, 0, width, ry);
+                this.lineTo(width, height - ry);
+                this.quadraticCurveTo(width, height, width - rx, height);
+                this.lineTo(rx, height);
+                this.quadraticCurveTo(0, height, 0, height - ry);
+                this.lineTo(0, ry);
+                this.quadraticCurveTo(0, 0, rx, 0);
+                this.translate(-x, -y);
+            };
             var ping = false;
             var connected = true;
             var connection = connection = new WebSocket("ws" + (window.location.protocol == "https:" ? "s" : "") + "://" + location.host + location.pathname + (location.pathname.endsWith("/") ? "" : "/") + "game"); // Make it adaptive, so it fits in my reverse proxy;
@@ -114,7 +180,7 @@
                 connection.send("_");
                 ping = true;
                 var bannerNotConnected = document.getElementById("notConnected");
-                if (!connected) {
+                if (!connected && !didSelectHome) {
                     bannerNotConnected.style.display = "";
                 }
                 else {
@@ -150,6 +216,131 @@
             var isFirstTick = true;
             var effect = "none";
             var CRTEffectWipe = 0;
+            var nearestCastleAngle = 0;
+            var totalTicksPassed = 0;
+            var startTime = 0;
+            var remainingHundredthsPretty = 0;
+            var remainingSecsPretty = 0;
+            var remainingMins = 0;
+            var sidebarScroll = 0;
+            var message = {
+                endTime: 0,
+                error: false,
+                content: "IF YOU CAN READ THIS YOU\nNEED TO TOUCH GRASS",
+                sticky: false
+            };
+            const preloads = {
+                basic_fighter: [
+                    document.getElementById("basic_fighter_img_mine"),
+                    document.getElementById("basic_fighter_img_enemy")
+                ],
+                sniper: [
+                    document.getElementById("sniper_img_mine"),
+                    document.getElementById("sniper_img_enemy")
+                ],
+                missile: [
+                    document.getElementById("missile_img_mine"),
+                    document.getElementById("missile_img_enemy")
+                ],
+                tie_fighter: [
+                    document.getElementById("tie_fighter_img_mine"),
+                    document.getElementById("tie_fighter_img_enemy")
+                ],
+                turret: [
+                    document.getElementById("turret_img_mine"),
+                    document.getElementById("turret_img_enemy")
+                ],
+                fort: [
+                    document.getElementById("fort_img_mine"),
+                    document.getElementById("fort_img_enemy")
+                ],
+                wall: document.getElementById("wall_img"),
+                friendlyWall: document.getElementById("friendly_wall_img"),
+                connection: [
+                    document.getElementById("connected"),
+                    document.getElementById("not_connected")
+                ],
+                message: {
+                    error: document.getElementById("error"),
+                    info: document.getElementById("info")
+                }
+            };
+            var palette = {
+                GREEN: "#00FF00",
+                RED: "#FF3131",
+                BLACK: "#000000",
+                WHITE: "#FFFFFF",
+                DARKGREEN: "#263435",
+                MIDGREEN: "#327963",
+                LIGHTGREEN: "#ACCF74",
+                ORANGECREAM: "#D8965A",
+                LIGHTBLUE: "#24E4D5",
+                AZKABANGREEN: "#1F1E23"
+            };
+            const art = {
+                f (cestDeMoi){
+                    ctx.rotate(Math.PI/2);
+                    ctx.drawImage(cestDeMoi ? preloads.basic_fighter[1] : preloads.basic_fighter[0], -30, -40);
+                    ctx.rotate(-Math.PI / 2);
+                },
+                c (){
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.roundRect(-40, -40, 80, 80, 20);
+                    ctx.stroke();
+                },
+                w () {
+                    ctx.drawImage(preloads.wall, -15, -15, 30, 30);
+                },
+                W () {
+                    ctx.drawImage(preloads.friendlyWall, -40, -40);
+                },
+                s (cestDeMoi) {
+                    ctx.rotate(-Math.PI / 2);
+                    var scaleDown = 2/3;
+                    ctx.drawImage(cestDeMoi ? preloads.sniper[1] : preloads.sniper[0], -14, -40);
+                    ctx.rotate(Math.PI / 2);
+                },
+                t (cestDeMoi) {
+                    ctx.drawImage(cestDeMoi ? preloads.tie_fighter[1] : preloads.tie_fighter[0], -31.5, -40);
+                },
+                T (cestDeMoi) {
+                    ctx.rotate(Math.PI / 2);
+                    ctx.drawImage(cestDeMoi ? preloads.turret[1] : preloads.turret[0], -37/2, -40);
+                    ctx.rotate(-Math.PI / 2);
+                },
+                h (cestDeMoi) {
+                    ctx.rotate(-Math.PI / 2);
+                    ctx.drawImage(cestDeMoi ? preloads.missile[1] : preloads.missile[0], -16, -40);
+                    ctx.rotate(Math.PI / 2);
+                },
+                F (cestDeMoi) {
+                    ctx.rotate(Math.PI / 2);
+                    ctx.drawImage(cestDeMoi ? preloads.fort[1] : preloads.fort[0], -40, -40);
+                    ctx.rotate(-Math.PI / 2);
+                },
+                draw(x, y, angle, thing, isMine = false, scaleDown = true){
+                    x = Math.round(x);
+                    if (!isMine){
+                        ctx.strokeStyle = palette.LIGHTGREEN;
+                    }
+                    else {
+                        ctx.strokeStyle = palette.ORANGECREAM;
+                    }
+                    ctx.fillStyle = ctx.strokeStyle;
+                    ctx.save();
+                    ctx.translate(x, y);
+                    ctx.rotate(angle);
+                    if (scaleDown){
+                        ctx.scale(window.innerWidth / 2560, window.innerWidth / 2560);
+                    }
+                    this[thing](isMine);
+                    ctx.restore();
+                },
+                drawObj(object){
+                    this.draw(object.x, object.y, object.angle, object.value, mine.indexOf(object.id) == -1);
+                }
+            };
             document.getElementById("enableNotifs").onclick = () => {
                 Notification.requestPermission().then((permission) => {
                     if (permission === "granted") {
@@ -166,53 +357,201 @@
             }
 
             function styleInfotextMajor(){
-                ctx.fillStyle = "green";
+                ctx.fillStyle = palette.RED;
                 ctx.textAlign = "center";
                 ctx.font = "bold 40px monospace";
             }
 
+            function drawCompass(compassRootX, compassRootY, size, range = 600){
+                ctx.strokeStyle = palette.MIDGREEN;
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.arc(compassRootX, compassRootY, size/2, 0, Math.PI * 2);
+                ctx.fillStyle = palette.DARKGREEN;
+                ctx.fill();
+                ctx.stroke();
+                ctx.fillStyle = "white";
+                ctx.textAlign = "center";
+                ctx.font = "12px monospace";
+                ctx.fillText("90", compassRootX + size/2 + 20, compassRootY);
+                ctx.fillText("0", compassRootX, compassRootY - size/2 - 20);
+                ctx.fillText("180", compassRootX, compassRootY + size/2 + 20);
+                ctx.fillText("270", compassRootX - size/2 - 20, compassRootY);
+                ctx.fillStyle = palette.ORANGECREAM;
+                ctx.translate(compassRootX, compassRootY);
+                for (var i = 0; i < 12; i++) {
+                    var ang = (Math.PI / 6) * i;
+                    ctx.rotate(Math.PI / 6);
+                    if (i % 3 != 2) {
+                        ctx.beginPath();
+                        ctx.arc(size/2 + 10, 0, 2.5, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+                ctx.strokeStyle = palette.LIGHTGREEN;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.makeRoundRect(-12, -12, 24, 24, 6, 6);
+                ctx.stroke();
+                var ang = Math.atan2(myCastle.y - (cY + compassRootY), myCastle.x - (cX + compassRootX));
+                ctx.rotate(ang);
+                ctx.lineWidth = 10;
+                ctx.strokeStyle = palette.ORANGECREAM;
+                ctx.beginPath();
+                ctx.arc(0, 0, size/2 - 5, -Math.PI / 24, Math.PI / 24);
+                ctx.stroke();
+                ctx.rotate(-ang);
+                var closestCastle = undefined;
+                var closestCastleDistance = Infinity;
+                Object.values(objects).forEach(item => {
+                    var deltaX = item.x - myCastle.x;
+                    var deltaY = item.y - myCastle.y;
+                    var distance2 = deltaX * deltaX + deltaY * deltaY;
+                    if (item.value == "f" || item.value == "t" || item.value == "h") {
+                        if (mine.indexOf(item.id) == -1) {
+                            ctx.fillStyle = palette.ORANGECREAM;
+                        }
+                        else {
+                            ctx.fillStyle = palette.LIGHTGREEN;
+                        }
+                        if (distance2 < range * range) { // Squares are far less expensive than square roots
+                            deltaX *= (size/2 - 10) / range;
+                            deltaY *= (size/2 - 10) / range;
+                            ctx.beginPath();
+                            ctx.arc(deltaX, deltaY, 5, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    }
+                    else if (item.value == "c") {
+                        deltaX = item.x - (cX + compassRootX);
+                        deltaY = item.y - (cY + compassRootY);
+                        distance2 = deltaX * deltaX + deltaY * deltaY;
+                        if (distance2 < closestCastleDistance) {
+                            closestCastleDistance = distance2;
+                            closestCastle = item;
+                        }
+                    }
+                });
+                if (closestCastle) {
+                    ang = Math.atan2(closestCastle.y - (cY + compassRootY), closestCastle.x - (cX + compassRootX));
+                    nearestCastleAngle = nearestCastleAngle * 0.9 + ang * 0.1;
+                    ctx.rotate(nearestCastleAngle);
+                    ctx.lineWidth = 5;
+                    ctx.strokeStyle = palette.ORANGECREAM;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size/2 - 15, -Math.PI / 35, Math.PI / 35);
+                    ctx.stroke();
+                    ctx.rotate(-nearestCastleAngle);
+                }
+                ctx.translate(-compassRootX, -compassRootY);
+            }
+
+            function drawMinimap(rootX, rootY, minimapSize){
+                const scaling = minimapSize / gameSize;
+                if (rootX < 0) {
+                    rootX = 0;
+                }
+                if (rootY < 0) {
+                    rootY = 0;
+                }
+                ctx.strokeStyle = palette.MIDGREEN;
+                ctx.fillStyle = palette.DARKGREEN;
+                ctx.lineWidth = 3;
+                ctx.setLineDash([40, 10]);
+                ctx.strokeRect(rootX, rootY, minimapSize, minimapSize);
+                ctx.fillRect(rootX, rootY, minimapSize, minimapSize);
+                ctx.setLineDash([]);
+                ctx.beginPath();
+                const capSize = 50;
+                ctx.lineWidth = 5;
+                ctx.strokeStyle = palette.LIGHTBLUE;
+                ctx.moveTo(rootX + capSize, rootY);
+                ctx.lineTo(rootX, rootY);
+                ctx.lineTo(rootX, rootY + capSize);
+                ctx.moveTo(rootX, rootY + minimapSize - capSize);
+                ctx.lineTo(rootX, rootY + minimapSize);
+                ctx.lineTo(rootX + capSize, rootY + minimapSize);
+                ctx.moveTo(rootX + minimapSize - capSize, rootY + minimapSize);
+                ctx.lineTo(rootX + minimapSize, rootY + minimapSize);
+                ctx.lineTo(rootX + minimapSize, rootY + minimapSize - capSize);
+                ctx.moveTo(rootX + minimapSize, rootY + capSize);
+                ctx.lineTo(rootX + minimapSize, rootY);
+                ctx.lineTo(rootX + minimapSize - capSize, rootY);
+                ctx.stroke();
+                var scaleDown = minimapSize / gameSize;
+                ctx.fillStyle = palette.RED;
+                ctx.fillRect(rootX + scaleDown * mousePos.gameX - 2.5, rootY + scaleDown * mousePos.gameY - 2.5, 5, 5);
+                Object.values(objects).forEach(item => {
+                    if (mine.indexOf(item.id) == -1) {
+                        ctx.fillStyle = palette.ORANGECREAM;
+                    }
+                    else {
+                        ctx.fillStyle = palette.LIGHTGREEN;
+                    }
+                    ctx.strokeStyle = ctx.fillStyle;
+                    var convertedX = item.x * scaleDown;
+                    convertedX += rootX;
+                    var convertedY = item.y * scaleDown;
+                    convertedY += rootY;
+                    if (item.value == "c") {
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.roundRect(convertedX - 5, convertedY - 5, 10, 10, 2);
+                        ctx.stroke();
+                    }
+                    else if (item.value == "f" || item.value == "t" || item.value == "h") {
+                        ctx.beginPath();
+                        ctx.arc(convertedX, convertedY, 2, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                });
+            }
+
             var inventoryStuff = [
                 {
-                    name: "Basic Fighter",
+                    name: "FIGHTER",
                     word: "f",
                     cost: 10,
                     place: true
                 },
                 {
-                    name: "Tie Fighter",
+                    name: "TIE",
                     word: "t",
                     cost: 20,
                     place: true
                 },
                 {
-                    name: "Sniper",
+                    name: "SNIPER",
                     word: "s",
                     cost: 30,
                     place: true
                 },
                 {
-                    name: "Hypersonic Missile",
+                    name: "MISSILE",
                     word: "h",
                     cost: 5,
                     place: true
                 },
                 {
-                    name: "Turret",
+                    name: "TURRET",
                     word: "T",
                     cost: 100,
                     place: true
                 },
                 {
-                    name: "Fort",
+                    name: "FORT",
                     word: "F",
                     cost: 120,
                     place: true
                 },
                 {
-                    name: "Extra Walls",
+                    name: "+2 WALL",
+                    word: "W",
                     cbk: () => {
-                        wallsTurn += 2;
-                        connection.send("C-30")
+                        if (score >= 30){
+                            wallsTurn += 2;
+                            connection.send("C-30")
+                        }
                     },
                     cost: 30
                 }
@@ -256,12 +595,25 @@
             };
 
             window.onwheel = (evt) => {
-                xv += evt.deltaX;
-                yv += evt.deltaY;
+                if (inventoryMode){
+                    sidebarScroll += evt.deltaY;
+                }
+                else{
+                    xv += evt.deltaX;
+                    yv += evt.deltaY;
+                }
             };
 
             function setName(name){
                 document.title = name;
+            }
+
+            function zeroes(number, zeroesCount = 4) {
+                var ret = "" + number;
+                while (ret.length < zeroesCount){
+                    ret = "0" + ret;
+                }
+                return ret;
             }
 
             function splitString(string, delim = " "){
@@ -285,6 +637,131 @@
                     ret.push(buf);
                 }
                 return ret;
+            }
+
+            function drawSidebar(scaleFactor = window.innerWidth / 2560) {
+                var sidebarY = mousePos.realY - sidebarScroll;
+                ctx.strokeStyle = palette.AZKABANGREEN;
+                ctx.lineWidth = 61 * scaleFactor * 2;
+                ctx.strokeRect(0, 0, window.innerWidth, window.innerHeight);
+                var rootWidth = window.innerWidth * 1 / 4.5;
+                inventoryMode = mousePos.realX < rootWidth;
+                ctx.fillStyle = palette.AZKABANGREEN;
+                ctx.fillRect(0, 0, rootWidth, window.innerHeight);
+                ctx.translate(0, sidebarScroll);
+                var dasImg = preloads.connection[1];
+                ctx.font = 70 * scaleFactor + "px Roboto";
+                var words = "OFFLINE";
+                if (connected) {
+                    dasImg = preloads.connection[0];
+                    words = "ONLINE";
+                }
+                var imgSize = rootWidth * 1 / 5;
+                ctx.drawImage(dasImg, Math.round(rootWidth / 10), Math.round(rootWidth / 10), imgSize, imgSize);
+                ctx.fillStyle = "#85A1AD";
+                ctx.textAlign = "right";
+                ctx.fillText(words, 495 * scaleFactor, rootWidth * 0.186);
+                ctx.fillText((remainingMins < 10 ? "0" : "") + remainingMins + ":" + (remainingSecsPretty < 10 ? "0" : "") + remainingSecsPretty + ":" + (remainingHundredthsPretty < 10 ? "0" : "") + remainingHundredthsPretty, 495 * scaleFactor, 200 * scaleFactor);
+                const cappedLine = (x, y, w, h = 4 * scaleFactor) => {
+                    var capSize = Math.min(w, h);
+                    ctx.fillStyle = "#484D51";
+                    ctx.fillRect(x, y, w, h);
+                    ctx.fillStyle = "#9B9EA5";
+                    ctx.fillRect(x, y, capSize, capSize);
+                    ctx.fillRect(x + w - capSize, y + h - capSize, capSize, capSize);
+                };
+                cappedLine(57 * scaleFactor, 33 * scaleFactor, 439 * scaleFactor);
+                cappedLine(181 * scaleFactor, 122 * scaleFactor, 315 * scaleFactor);
+                cappedLine(57 * scaleFactor, 215 * scaleFactor, 439 * scaleFactor);
+                cappedLine(57 * scaleFactor, 281 * scaleFactor, 439 * scaleFactor);
+                cappedLine(57 * scaleFactor, 319 * scaleFactor, 4 * scaleFactor, 466 * scaleFactor);
+                cappedLine(492 * scaleFactor, 319 * scaleFactor, 4 * scaleFactor, 466 * scaleFactor);
+                cappedLine(73 * scaleFactor, 317 * scaleFactor, 407 * scaleFactor);
+                cappedLine(73 * scaleFactor, 779 * scaleFactor, 407 * scaleFactor);
+                ctx.fillStyle = "#85A1AD";
+                ctx.textAlign = "left";
+                ctx.fillText("SHOP", 73 * scaleFactor, (215 + 60) * scaleFactor);
+                ctx.beginPath();
+                ctx.roundRect(314 * scaleFactor, 236 * scaleFactor, 99 * scaleFactor, 35 * scaleFactor, 4 * scaleFactor);
+                ctx.fill();
+                ctx.font = 30 * scaleFactor + "px Roboto";
+                ctx.fillText(score, 440 * scaleFactor, (234 + 30) * scaleFactor);
+                ctx.fillStyle = "#484D51";
+                ctx.fillText("SCORE", 316 * scaleFactor, (234 + 30) * scaleFactor);
+
+                // SHOP
+                for (var x = 0; x < 3; x ++) {
+                    cappedLine(73 * scaleFactor, (443 + x * 103) * scaleFactor, 407 * scaleFactor);
+                }
+                inventoryStuff.forEach((item, i) => {
+                    var x = 74 + (i % 2) * 203.5;
+                    var y = 340 + 103 * Math.floor(i / 2);
+                    x *= scaleFactor;
+                    y *= scaleFactor;
+                    if (item.word){
+                        art.draw(x + (50 - 20 * (1 - (i % 2))) * scaleFactor, y + 50 * scaleFactor, Math.PI/2, item.word, false, true);
+                    }
+                    ctx.fillStyle = "#FBFBD6";
+                    ctx.font = 32 * scaleFactor + "px Roboto";
+                    ctx.textAlign = "right";
+                    ctx.fillText(item.name, x + 200 * scaleFactor, y + (32) * scaleFactor);
+                    ctx.beginPath();
+                    ctx.roundRect(x + 128 * scaleFactor, y + 40 * scaleFactor, 72 * scaleFactor, 35 * scaleFactor, 4 * scaleFactor);
+                    ctx.fillStyle = "#85A1AD";
+                    ctx.fill();
+                    ctx.font = 30 * scaleFactor + "px Roboto";
+                    ctx.fillStyle = "#484D51";
+                    ctx.textAlign = "left";
+                    ctx.fillText(zeroes(item.cost), x + 130 * scaleFactor, y + 68 * scaleFactor);
+                    if (didSelectHome && playing && isStratChange && score >= item.cost){
+                        if (mousePos.realX > x && mousePos.realX < (x + 203.5 * scaleFactor) && sidebarY > y && sidebarY < (y + 103 * scaleFactor)) {
+                            inventoryHovered = i;
+                            ctx.strokeStyle = "yellow";
+                            ctx.lineWidth = 2;
+                            ctx.strokeRect(x, y, 203.5 * scaleFactor, 103 * scaleFactor);
+                        }
+                        if (inventoryPlace == item.word){
+                            ctx.strokeStyle = "red";
+                            ctx.lineWidth = 4;
+                            ctx.strokeRect(x, y, 203.5 * scaleFactor, 103 * scaleFactor);
+                        }
+                    }
+                });
+                ctx.translate(0, -sidebarScroll);
+            }
+
+            function drawMessage(scaleFactor = window.innerWidth/2560){
+                if (window.performance.now() < message.endTime || message.sticky) {
+                    var messageHeight = 91 * scaleFactor;
+                    var messageWidth = 621 * scaleFactor;
+                    var messageRootX = (window.innerWidth - messageWidth) - 10;
+                    var messageRootY = (window.innerHeight - messageHeight) - 10;
+                    ctx.fillStyle = palette.AZKABANGREEN;
+                    ctx.fillRect(messageRootX - 10 * scaleFactor, messageRootY - 10 * scaleFactor, messageWidth + 40 * scaleFactor, messageHeight + 40 * scaleFactor);
+                    if (message.error) {
+                        ctx.fillStyle = "#FF7559";
+                    }
+                    else {
+                        ctx.fillStyle = "#76C2D9";
+                    }
+                    ctx.fillRect(messageRootX, messageRootY, messageWidth, messageHeight);
+                    var art = preloads.message.error;
+                    if (message.error) {
+                        ctx.fillStyle = "#8C4031";
+                    }
+                    else {
+                        art = preloads.message.info;
+                        ctx.fillStyle = "#437282";
+                    }
+                    ctx.drawImage(art, messageRootX + 63 * scaleFactor, messageRootY + 5 * scaleFactor, messageHeight - 10 * scaleFactor, messageHeight - 10 * scaleFactor);
+                    ctx.font = 30 * scaleFactor + "px Inter";
+                    ctx.textAlign = "left";
+                    var textBaseline = messageRootY;
+                    message.content.split("\n").forEach((line) => {
+                        textBaseline += 36 * scaleFactor;
+                        ctx.fillText(line, messageRootX + 205 * scaleFactor, textBaseline);
+                    });
+                }
             }
 
             connection.onmessage = (message) => {
@@ -364,8 +841,10 @@
                     mine.push(args[0] - 0);
                 }
                 else if (command == "t"){
+                    totalTicksPassed ++;
                     counter = args[0] - 0;
                     if (isFirstTick){
+                        startTime = window.performance.now();
                         if (!document.hasFocus() && sendNotifs) {
                             const notification = new Notification("Game started!");
                         }
@@ -434,40 +913,25 @@
             });
 
             function mainloop(){
+                ctx.webkitImageSmoothingEnabled = false;
+                ctx.mozImageSmoothingEnabled = false;
+                ctx.imageSmoothingEnabled = false;
+                var timeElapsedSinceStart = window.performance.now() - startTime;
+                var timePerTick = timeElapsedSinceStart/totalTicksPassed;
+                var remainingMillis = timePerTick * counter;
+                remainingHundredthsPretty = Math.floor(remainingMillis/10) % 100;
+                var remainingSecs = Math.floor(remainingMillis/1000);
+                remainingSecsPretty = remainingSecs % 60;
+                remainingMins = Math.floor(remainingSecs/60);
+                if (totalTicksPassed == 0) {
+                    remainingMins = 0;
+                    remainingSecsPretty = 0;
+                    remainingHundredthsPretty = 0;
+                }
                 requestAnimationFrame(mainloop);
                 ctx.fillStyle = "black";
-                ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+                ctx.fillRect(-5, -5, 10 + window.innerWidth, 10 + window.innerHeight);
                 inventoryHovered = -1;
-                if (inventoryMode) {
-                    styleInfotextMajor();
-                    ctx.fillText("Inventory", window.innerWidth / 2, 100);
-                    var columnCount = Math.floor(window.innerWidth / 200);
-                    for (var i = 0; i < inventoryStuff.length; i ++){
-                        var x = i % columnCount;
-                        var y = 2 + Math.floor(i / columnCount);
-                        x *= 200;
-                        y *= 100;
-                        ctx.fillStyle = "white";
-                        ctx.font = "12px monospace";
-                        ctx.fillText(inventoryStuff[i].name, x + 100, y + 20);
-                        ctx.fillText(inventoryStuff[i].cost, x + 100, y + 80);
-                        styleInfotextMajor();
-                        ctx.font = "12px monospace";
-                        if (score >= inventoryStuff[i].cost){
-                            ctx.fillText("[ CLICK TO BUY ]", x + 100, y + 50);
-                        }
-                        else {
-                            ctx.fillText("[ INSUFFICIENT SCORE ]", x + 100, y + 50);
-                        }
-                        if ((mousePos.realX > x) && (mousePos.realX < x + 200) && (mousePos.realY > y) && (mousePos.realY < y + 100)) {
-                            inventoryHovered = i;
-                            ctx.strokeStyle = "yellow";
-                            ctx.lineWidth = 5;
-                            ctx.strokeRect(x, y, 200, 100);
-                        }
-                    }
-                    return;
-                }
                 if (myCastle) {
                     canPlaceWall = (Math.abs(mousePos.gameX - myCastle.x) < 400) && (Math.abs(mousePos.gameY - myCastle.y) < 400) || inventoryPlace == "F";
                     mine.forEach(index => {
@@ -508,94 +972,22 @@
                 }
                 ctx.translate(-cX, -cY);
 
-                ctx.strokeStyle = "black";
-                ctx.fillStyle = "#555555";
-                ctx.lineWidth = 10;
+                ctx.strokeStyle = palette.MIDGREEN;
+                ctx.setLineDash([40, 10]);
+                ctx.fillStyle = palette.DARKGREEN;
+                ctx.lineWidth = 3;
+                ctx.fillRect(-2.5, -2.5, gameSize + 5, gameSize + 5);
                 ctx.strokeRect(0, 0, gameSize, gameSize);
-                ctx.fillRect(0, 0, gameSize, gameSize);
+                ctx.setLineDash([]);
                 ctx.fillStyle = "black";
                 ctx.fillRect(mousePos.gameX - 5, mousePos.gameY - 5, 10, 10);
 
                 hovered = undefined;
                 Object.keys(objects).forEach(id => {
                     var object = objects[id];
-                    if (object.value == "c"){
-                        if (mine.indexOf(object.id) == -1){
-                            ctx.fillStyle = "green";
-                        }
-                        else{
-                            ctx.fillStyle = "lightgreen";
-                        }
-                        ctx.fillRect(object.x - 25, object.y - 25, 50, 50);
-                    }
-                    else if (object.value == "F"){
+                    if (object.value == "F"){
                         ctx.fillStyle = "black";
                         ctx.fillRect(object.x - 10, object.y - 10, 20, 20);
-                    }
-                    else if (object.value == "f"){
-                        if (mine.indexOf(object.id) == -1){
-                            ctx.fillStyle = "purple";
-                        }
-                        else {
-                            ctx.fillStyle = "#FFAAFF";
-                        }
-                        ctx.save();
-                        ctx.translate(object.x, object.y);
-                        ctx.rotate(object.angle);
-                        ctx.fillRect(-60, -3, 70, 6);
-                        ctx.strokeStyle = ctx.fillStyle;
-                        ctx.lineWidth = 6;
-                        ctx.beginPath();
-                        ctx.moveTo(10, 0);
-                        ctx.lineTo(0, -10);
-                        ctx.lineTo(0, 10);
-                        ctx.closePath();
-                        ctx.stroke();
-                        ctx.restore();
-                    }
-                    else if (object.value == "t") {
-                        if (mine.indexOf(object.id) == -1) {
-                            ctx.fillStyle = "blue";
-                        }
-                        else {
-                            ctx.fillStyle = "#00AAFF";
-                        }
-                        ctx.save();
-                        ctx.translate(object.x, object.y);
-                        ctx.rotate(object.angle);
-                        ctx.fillRect(-60, -3, 70, 6);
-                        ctx.strokeStyle = ctx.fillStyle;
-                        ctx.lineWidth = 6;
-                        ctx.beginPath();
-                        ctx.moveTo(10, 0);
-                        ctx.lineTo(0, -10);
-                        ctx.lineTo(0, 10);
-                        ctx.closePath();
-                        ctx.stroke();
-                        ctx.fillStyle = "black";
-                        ctx.fillRect(-40, -10, 30, 2);
-                        ctx.fillRect(-40, 10, 30, 2);
-                        ctx.restore();
-                    }
-                    else if (object.value == "s") {
-                        if (mine.indexOf(object.id) == -1) {
-                            ctx.fillStyle = "black";
-                        }
-                        else {
-                            ctx.fillStyle = "#555555";
-                        }
-                        ctx.save();
-                        ctx.translate(object.x, object.y);
-                        ctx.rotate(object.angle);
-                        ctx.fillRect(-60, -1, 70, 2);
-                        ctx.strokeStyle = ctx.fillStyle;
-                        ctx.lineWidth = 4;
-                        ctx.beginPath();
-                        ctx.moveTo(0, -10);
-                        ctx.lineTo(10, 0);
-                        ctx.lineTo(0, 10);
-                        ctx.stroke();
-                        ctx.restore();
                     }
                     else if (object.value == "b"){
                         ctx.fillStyle = "green";
@@ -603,46 +995,18 @@
                         ctx.arc(object.x, object.y, 5, 0, Math.PI * 2);
                         ctx.fill();
                     }
-                    else if (object.value == "h"){
-                        if (mine.indexOf(object.id) == -1) {
-                            ctx.strokeStyle = "#AA00AA";
-                        }
-                        else {
-                            ctx.strokeStyle = "purple";
-                        }
-                        ctx.fillStyle = "brown";
-                        ctx.lineWidth = 3;
-                        ctx.beginPath();
-                        ctx.arc(object.x, object.y, 5, 0, Math.PI * 2);
-                        ctx.fill();
-                        ctx.stroke();
-                        ctx.beginPath();
-                        ctx.moveTo(object.x, object.y);
-                        ctx.lineTo(object.x + Math.cos(object.angle) * 30, object.y + Math.sin(object.angle) * 30);
-                        ctx.stroke();
-                    }
-                    else if (object.value == "w"){
+                    /*else if (object.value == "w"){
                         ctx.fillStyle = "grey";
                         ctx.fillRect(object.x - 15, object.y - 15, 30, 30);
-                    }
+                    }*/
                     else if (object.value == "C"){
                         ctx.fillStyle = "pink";
                         ctx.fillRect(object.x - 15, object.y - 15, 30, 10);
                         ctx.fillStyle = "gold";
                         ctx.fillRect(object.x - 15, object.y - 5, 30, 20);
                     }
-                    else if (object.value == "T"){
-                        ctx.fillStyle = "black";
-                        ctx.fillRect(object.x - 10, object.y - 10, 20, 20);
-                        ctx.translate(object.x, object.y);
-                        ctx.rotate(object.angle);
-                        ctx.fillStyle = "yellow";
-                        ctx.fillRect(-5, -2.5, 40, 5);
-                        ctx.rotate(-object.angle);
-                        ctx.translate(-object.x, -object.y);
-                    }
                     else {
-                        console.warn("Unkown object of type " + object.value);
+                        art.drawObj(object);
                     }
                     if (mousePos.gameX > object.x - 10 && mousePos.gameX < object.x + 10 && mousePos.gameY > object.y - 10 && mousePos.gameY < object.y + 10) {
                         if (mine.indexOf(object.id) != -1) {
@@ -655,7 +1019,7 @@
                             }
                         }
                         else {
-                            ctx.fillStyle = "red";
+                            ctx.fillStyle = palette.RED;
                             ctx.font = "10px sans-serif";
                             var size = ctx.measureText(banners[object.banner]);
                             ctx.fillRect(mousePos.gameX - size.width - 5, mousePos.gameY - 15, size.width + 10, 20);
@@ -665,21 +1029,27 @@
                         }
                     }
                     if (object.isEditable && mine.indexOf(object.id) != -1){
-                        ctx.lineWidth = 1;
-                        ctx.strokeStyle = "black";
+                        ctx.lineWidth = 2;
+                        ctx.setLineDash([6, 2]);
+                        ctx.strokeStyle = palette.MIDGREEN;
                         ctx.beginPath();
                         ctx.moveTo(object.x, object.y);
                         ctx.lineTo(object.goalPos.x, object.goalPos.y);
                         ctx.stroke();
-                        ctx.fillStyle = "red";
+                        ctx.setLineDash([]);
+                        ctx.fillStyle = palette.LIGHTBLUE;
                         ctx.beginPath();
-                        ctx.arc(object.goalPos.x, object.goalPos.y, 5, 0, Math.PI * 2);
+                        ctx.arc(object.goalPos.x, object.goalPos.y, 3, 0, Math.PI * 2);
                         ctx.fill();
                         ctx.lineWidth = 3;
-                        ctx.strokeStyle = "blue";
+                        ctx.strokeStyle = palette.LIGHTBLUE;
                         ctx.beginPath();
-                        ctx.moveTo(object.goalPos.x, object.goalPos.y);
-                        ctx.lineTo(object.goalPos.x + Math.cos(object.goalPos.angle) * 20, object.goalPos.y + Math.sin(object.goalPos.angle) * 20);
+                        ctx.save();
+                        ctx.translate(object.goalPos.x, object.goalPos.y);
+                        ctx.rotate(object.goalPos.angle);
+                        ctx.moveTo(5, 0);
+                        ctx.lineTo(5 + 11, 0);
+                        ctx.restore();
                         ctx.stroke();
                     }
                 });
@@ -700,57 +1070,6 @@
                     angleAdjustMode = false;
                     hovered = undefined;
                     inventoryPlace = undefined;
-                }
-                if (keysDown["c"] && myCastle) {
-                    ctx.fillStyle = "white";
-                    ctx.strokeStyle = "blue";
-                    ctx.lineWidth = 10;
-                    ctx.beginPath();
-                    ctx.arc(mousePos.gameX, mousePos.gameY, 100, 0, Math.PI * 2);
-                    ctx.stroke();
-                    ctx.beginPath();
-                    ctx.moveTo(mousePos.gameX, mousePos.gameY);
-                    var dX = mousePos.gameX - myCastle.x;
-                    var dY = mousePos.gameY - myCastle.y;
-                    var distance = Math.sqrt(dX * dX + dY * dY);
-                    dX /= distance;
-                    dY /= distance;
-                    ctx.strokeStyle = "red";
-                    ctx.lineTo(mousePos.gameX + -dX * 150, mousePos.gameY + -dY * 150);
-                    ctx.stroke();
-                    /*objects.forEach(obj => {
-                        if (obj.value == "c"){
-                            
-                        }
-                    });*/
-                }
-                else if (keysDown["m"]){
-                    const minimapSize = 200;
-                    const scaling = minimapSize/gameSize;
-                    var rootX = mousePos.gameX - minimapSize;
-                    var rootY = mousePos.gameY - minimapSize;
-                    if (rootX < 0){
-                        rootX = 0;
-                    }
-                    if (rootY < 0){
-                        rootY = 0;
-                    }
-                    ctx.globalAlpha = 0.8;
-                    ctx.fillStyle = "white";
-                    ctx.fillRect(rootX, rootY, minimapSize, minimapSize);
-                    ctx.fillStyle = "red";
-                    ctx.fillRect(rootX + (mousePos.gameX) * scaling - 2.5, rootY + (mousePos.gameY) * scaling - 2.5, 5, 5);
-                    Object.values(objects).forEach(obj => {
-                        if (obj.value == "c"){
-                            ctx.fillStyle = "green";
-                            ctx.fillRect(rootX + obj.x * scaling - 2, rootY + obj.y * scaling - 2, 4, 4);
-                        }
-                        else if (obj.value != "b" && obj.value != "s" && obj.value != "w" && obj.value != "C"){
-                            ctx.fillStyle = "black";
-                            ctx.fillRect(rootX + obj.x * scaling - 1, rootY + obj.y * scaling - 1, 2, 2);
-                        }
-                    });
-                    ctx.globalAlpha = 1;
                 }
                 ctx.translate(cX, cY);
                 if (keysDown["ArrowUp"]){
@@ -781,8 +1100,8 @@
                 if (cY > gameSize - window.innerHeight/2){
                     cY = gameSize - window.innerHeight/2;
                 }
-                if (playing){
-                    styleInfotextMajor();
+                styleInfotextMajor();
+                /*if (playing){
                     if (didSelectHome){
                         if (counter == 0){
                             if (timeToStart == -1){
@@ -829,25 +1148,87 @@
                     else{
                         ctx.fillText("You are a spectator!", window.innerWidth/2, 100);
                     }
+                }*/
+                drawSidebar();
+                drawMessage();
+                /*ctx.font = "18px monospace";
+                ctx.textAlign = "left";
+                var mode = "WAITING";
+                if (playing) {
+                    if (myCastle){
+                        ctx.fillText(banners[myCastle.banner], 70, 30);
+                    }
+                    else {
+                        ctx.fillText("PLAYER", 70, 30);
+                    }
+                    if (!didSelectHome){
+                        if (canPlaceCastle){
+                            mode = "PLACE YOUR HOME CASTLE";
+                        }
+                        else {
+                            mode = "CAN'T PLACE A CASTLE HERE";
+                        }
+                    }
+                    else {
+                        if (isStratChange){
+                            if (inventoryPlace) {
+                                if (canPlaceWall) {
+                                    mode = "PLACE YOUR GAMEPIECE";
+                                }
+                                else {
+                                    mode = "CAN'T PLACE A GAMEPIECE HERE";
+                                }
+                            }
+                            else {
+                                mode = "MOVE YOUR SHIPS";
+                            }
+                        }
+                        else if (counter != 0) {
+                            mode = "PLAY MODE";
+                        }
+                    }
+                }
+                else {
+                    ctx.fillText("SPECTATOR", 70, 30);
+                }
+                ctx.font = "16px monospace";
+                ctx.fillText(mode, 70, 60);
+                if (counter == 0){
+                    if (timeToStart == -1){
+                        ctx.fillText("WAITING", 10, 100);
+                    }
+                    else {
+                        ctx.fillText(timeToStart, 10, 100);
+                    }
+                }
+                else {
+                    ctx.fillText(remainingMins + ":" + remainingSecsPretty + ":" + remainingHundredthsPretty, 10, 100);
                 }
                 ctx.font = "16px sans-serif";
                 ctx.fillStyle = "white";
                 ctx.textAlign = "left";
-                ctx.fillText(score, 50, 50);
-                ctx.fillStyle = "green";
-                ctx.fillText("Time Left in " + (isStratChange ? "strategy mode" : "play mode") + ": " + counter, 50, 100);
+                ctx.fillText(score, 100, 100);
+                if (myCastle && keysDown["c"]){
+                    drawCompass(window.innerWidth - 160, window.innerHeight - 260 - 125 - 40, 250);
+                }
+                else{
+                    drawMinimap(window.innerWidth - 285, window.innerHeight - 260, 250);
+                }*/
+
+                ctx.fillStyle = palette.RED;
+                //ctx.fillText("Time Left in " + (isStratChange ? "strategy mode" : "play mode") + ": " + counter, 50, 100);
                 if (wallsRemaining > 0){
                     ctx.textAlign = "right";
                     if (!canPlaceWall){
-                        //ctx.fillStyle = "red";
+                        //ctx.fillStyle = palette.RED;
                     }
-                    ctx.fillText("Remaining walls (" + (canPlaceWall ? "press W to place one!" : "can't place here!") + "): " + wallsRemaining, window.innerWidth - 50, 50);
+                    //ctx.fillText("Remaining walls (" + (canPlaceWall ? "press W to place one!" : "can't place here!") + "): " + wallsRemaining, window.innerWidth - 50, 50);
                 }
                 if (effect == "CRT"){
                     ctx.beginPath();
-                    ctx.strokeStyle = "darkgrey";
+                    ctx.strokeStyle = "black";
                     ctx.lineWidth = 0.5;
-                    const lineCount = 100;
+                    const lineCount = 50;
                     for (var y = 0; y < lineCount; y ++){
                         var linePos = y * window.innerHeight/lineCount;
                         linePos += CRTEffectWipe % (window.innerHeight/lineCount);
@@ -865,25 +1246,25 @@
 
                 window.addEventListener("mouseup", (evt) => {
                     if (didSelectHome){
-                        if (inventoryPlace){
-                            if (canPlaceWall){
-                                connection.send("p" + inventoryPlace + " " + mousePos.gameX + " " + mousePos.gameY);
-                                inventoryPlace = undefined;
+                        if (inventoryHovered != -1) {
+                            if (inventoryStuff[inventoryHovered].cbk){
+                                inventoryStuff[inventoryHovered].cbk();
                             }
-                        }
-                        else if (inventoryHovered != -1) {
-                            if (inventoryStuff[inventoryHovered].word){
+                            else {
                                 if (inventoryStuff[inventoryHovered].place) {
                                     inventoryPlace = inventoryStuff[inventoryHovered].word;
                                 }
-                                else{
+                                else {
                                     connection.send("p" + inventoryStuff[inventoryHovered].word + " " + (myCastle.x + (Math.random() * 300 - 150)) + " " + (myCastle.y + (Math.random() * 300 - 150)));
                                 }
                             }
-                            else {
-                                inventoryStuff[inventoryHovered].cbk();
-                            }
                             inventoryMode = false;
+                        }
+                        else if (inventoryPlace) {
+                            if (canPlaceWall) {
+                                connection.send("p" + inventoryPlace + " " + mousePos.gameX + " " + mousePos.gameY);
+                                inventoryPlace = undefined;
+                            }
                         }
                         else if (isStratChange){
                             if (angleAdjustMode) {
