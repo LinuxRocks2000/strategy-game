@@ -158,7 +158,7 @@ struct GameObject {
         hasLostCallback = true;
     }
 
-    ~GameObject () {
+    virtual ~GameObject () {
         broadcast((std::string)"d" + std::to_string(id));
     }
 
@@ -185,7 +185,11 @@ struct GameObject {
         }
     }
 
-    void shoot(float angle, float speed = 20, float dist = 20, int duration = -1);
+    virtual void greet() {
+        // Extend to "greet" new clients
+    }
+
+    void shoot(float angle, float speed = 20, float dist = 50, int duration = -1);
 };
 
 
@@ -458,6 +462,111 @@ public:
 };
 
 
+class RadiationObject : public GameObject {
+public:
+    int halflife = 150;
+    double startingStrength = 0.5;
+    unsigned long cycle = 0;
+    Box mBox { -200, -200, 200, 200 };
+
+    RadiationObject() {
+        health = 10000000;
+    }
+
+    char identify(){
+        return 'r';
+    }
+
+    void update() {
+        double strength = std::pow(0.5, ((double)cycle)/halflife) * startingStrength;
+        broadcast("r" + std::to_string(id) + " " + std::to_string(strength));
+        cycle ++;
+        if (strength < 0.01){
+            rm = true;
+        }
+        damage = strength/15;
+    }
+
+    void destroy(){
+        // do nothing! Radiation can't be killed
+    }
+
+    Box box () {
+        return { x + mBox.x1, y + mBox.y1, x + mBox.x2, y + mBox.y2 };
+    }
+
+    void upd8Box () {
+        broadcast("█" + std::to_string(id) + " " + std::to_string(mBox.x1) + " " + std::to_string(mBox.y1) + " " + std::to_string(mBox.x2) + " " + std::to_string(mBox.y2));
+    }
+
+    void greet() {
+        upd8Box();
+    }
+};
+
+
+class NukeObject : public GameObject {
+public:
+    ~NukeObject(){
+        broadcast((std::string)"d" + std::to_string(id));
+        blowUP();
+    }
+
+    float xv = 0;
+    float yv = 0;
+
+    int explodeTimer = 500;
+
+    void blowUP();
+
+    void update() {
+        explodeTimer --;
+        if (explodeTimer < 0){
+            destroy();
+        }
+        double dx = goalX - x;
+        double dy = goalY - y;
+        if (((dx * dx) + (dy * dy)) > 10 * 10){
+            angle = atan(dy/dx);
+            if (dx <= 0){
+                angle += PI;
+            }
+            xv += cos(angle) * 0.1;
+            yv += sin(angle) * 0.1;
+        }
+        else {
+            angle = goalAngle;
+        }
+        x += xv;
+        y += yv;
+        xv *= 0.999;
+        yv *= 0.999;
+        broadcast((std::string)"M" + std::to_string(id) + " " + std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(angle));
+    }
+
+    void destroy() {
+        terminal.printLn("destroying");
+        broadcast("j100");
+        if (hasLostCallback){
+            lostFunction(this);
+        }
+        rm = true;
+    }
+
+    char identify() {
+        return 'n';
+    }
+
+    bool editable() {
+        return true;
+    }
+
+    Box box (){
+        return { x - 10, y - 10, x + 10, y + 10 };
+    }
+};
+
+
 class WallObject : public GameObject {
 public:
     WallObject() {
@@ -665,6 +774,17 @@ struct Client {
                         collect(-5);
                     }
                 }
+                else if (args[0] == "n"){
+                    if (score >= 150){
+                        NukeObject* f = new NukeObject;
+                        f -> x = std::stoi(args[1]);
+                        f -> y = std::stoi(args[2]);
+                        f -> goalX = f -> x;
+                        f -> goalY = f -> y;
+                        add(f);
+                        collect(-150);
+                    }
+                }
                 else if (args[0] == "T"){
                     if (score >= 100){
                         TurretObject* f = new TurretObject;
@@ -712,6 +832,7 @@ struct Client {
         sendText("m" + std::to_string(gameSize) + " " + std::to_string(terrainSeed));
         for (GameObject* obj : objects){
             sendObject(obj);
+            obj -> greet();
         }
         for (size_t banner = 0; banner < banners.size(); banner ++){
             sendText((std::string)"b" + std::to_string(banner) + " " + banners[banner]);
@@ -828,8 +949,8 @@ struct Client {
     }
 
     template <typename T>
-    void newRelativeThing(long relX, long relY, float angle = 0){
-        newFighter<T>(deMoi -> x + relX, deMoi -> y + relY, angle);
+    T* newRelativeThing(long relX, long relY, float angle = 0){
+        return newFighter<T>(deMoi -> x + relX, deMoi -> y + relY, angle);
     }
 
     void newRelativeFighter(long relX, long relY, float angle = 0){
@@ -892,6 +1013,28 @@ class ChestObject : public GameObject {
         return { x - 15, y - 15, x + 15, y + 15 };
     }
 };
+
+
+void NukeObject::blowUP(){
+    RadiationObject* intenseField = new RadiationObject;
+    intenseField -> x = x;
+    intenseField -> y = y;
+    intenseField -> mBox = {
+        -50, -50, 50, 50
+    };
+    intenseField -> halflife = 60; // VERY short-lived
+    intenseField -> startingStrength = 0.7; // But VERY strong field
+    RadiationObject* weakField = new RadiationObject;
+    weakField -> x = x;
+    weakField -> y = y;
+    weakField -> mBox = {
+        -300, -300, 300, 300
+    };
+    weakField -> halflife = 250; // Comparatively long-lived
+    weakField -> startingStrength = 0.2; // Slightly below average
+    addObject(weakField);
+    addObject(intenseField);
+}
 
 
 std::vector <Client*> clients;
@@ -1035,8 +1178,8 @@ void tick(){
                     char xWord = objects[x] -> identify();
                     char yWord = objects[y] -> identify();
                     if (xWord == 'c' || xWord == 'F'){
-                        // If the collision root object is a castle
-                        if ((yWord == 'b') || (yWord == 'h')) {
+                        // If the collision root object is a castle or fort
+                        if ((yWord == 'b') || (yWord == 'h') || (yWord == 'n') || (yWord == 'r')) {
                             collided = true;
                         }
                     }
@@ -1050,10 +1193,10 @@ void tick(){
                             collided = true;
                         }
                     }
-                    else if (xWord == 'h'){
+                    else if ((xWord == 'h') || (xWord == 'r') || (xWord == 'n')){
                         collided = true; // They hit *everything*
                     }
-                    else{ // If it's anything else, it's a fighter.
+                    else { // If it's anything else, it's a fighter.
                         if (yWord != 'c'){
                             collided = true;
                         }
@@ -1248,6 +1391,7 @@ void addObject(GameObject* obj){
     for (Client* cli : clients){
         cli -> sendObject(obj);
     }
+    obj -> greet();
 }
 
 
@@ -1305,7 +1449,7 @@ int main(int argc, char** argv){
     });
     CROW_ROUTE(webserver, "/images/<path>")([](const crow::request& req, crow::response& res, std::string path){
         res.set_static_file_info("images/" + path);
-        terminal.printLn("images/" + path);
+        //terminal.printLn("images/" + path);
         res.end();
     });
     CROW_ROUTE(webserver, "/game").websocket().onopen([](crow::websocket::connection& conn){

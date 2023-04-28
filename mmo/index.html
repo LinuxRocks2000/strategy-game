@@ -117,6 +117,8 @@
         <img class="preload_img" id="missile_img_mine" src="images/Missile_mine.svg" />
         <img class="preload_img" id="fort_img_enemy" src="images/Fort_enemy.svg" />
         <img class="preload_img" id="fort_img_mine" src="images/Fort_mine.svg" />
+        <img class="preload_img" id="nuke_img_enemy" src="images/Nuke_enemy.svg" />
+        <img class="preload_img" id="nuke_img_mine" src="images/Nuke_mine.svg" />
         <img class="preload_img" id="wall_img" src="images/Wall.svg" />
         <img class="preload_img" id="friendly_wall_img" src="images/Extra_wall_friendly.svg" />
         <img class="preload_img" id="not_connected" src="images/notConnectedIndicator.svg" />
@@ -324,6 +326,14 @@
             var remainingSecsPretty = 0;
             var remainingMins = 0;
             var sidebarScroll = 0;
+            var radDisplay = 0;
+            var jitter = 0;
+            var timePerTick = 1000/30; // 30 FPS
+            var exploder = {
+                x: 0,
+                y: 0,
+                time: 0
+            };
             var message = {
                 endTime: 0,
                 error: false,
@@ -354,6 +364,10 @@
                 fort: [
                     document.getElementById("fort_img_mine"),
                     document.getElementById("fort_img_enemy")
+                ],
+                nuke: [
+                    document.getElementById("nuke_img_mine"),
+                    document.getElementById("nuke_img_mine")
                 ],
                 wall: document.getElementById("wall_img"),
                 friendlyWall: document.getElementById("friendly_wall_img"),
@@ -419,6 +433,11 @@
                 F (cestDeMoi) {
                     ctx.rotate(Math.PI / 2);
                     ctx.drawImage(cestDeMoi ? preloads.fort[1] : preloads.fort[0], -40, -40);
+                    ctx.rotate(-Math.PI / 2);
+                },
+                n(cestDeMoi) {
+                    ctx.rotate(Math.PI / 2);
+                    ctx.drawImage(cestDeMoi ? preloads.nuke[1] : preloads.nuke[0], -30, -30);
                     ctx.rotate(-Math.PI / 2);
                 },
                 draw(x, y, angle, thing, isMine = false, scaleDown = true, scaleFactor = window.innerWidth/2560){
@@ -603,7 +622,7 @@
                         ctx.roundRect(convertedX - 5, convertedY - 5, 10, 10, 2);
                         ctx.stroke();
                     }
-                    else if (item.value == "f" || item.value == "t" || item.value == "h") {
+                    else if (item.value == "f" || item.value == "t" || item.value == "h" || item.value == "n") {
                         ctx.beginPath();
                         ctx.arc(convertedX, convertedY, 2, 0, Math.PI * 2);
                         ctx.fill();
@@ -658,6 +677,12 @@
                         }
                     },
                     cost: 30
+                },
+                {
+                    name: "NUKE",
+                    word: "n",
+                    cost: 150,
+                    place: true
                 }
             ];
 
@@ -743,10 +768,48 @@
                 return ret;
             }
 
+            function drawRadiometer(scaleFactor){
+                ctx.fillStyle = palette.AZKABANGREEN;
+                var rootX = 1021 * scaleFactor;
+                var rootY = window.innerHeight - 120 * scaleFactor;
+                ctx.fillRect(rootX, rootY, 444 * scaleFactor, 85 * scaleFactor);
+                var colors = [
+                    "#E6EFEA",
+                    "#9FADA5",
+                    "#708077",
+                    "#405449",
+                    "#283D31"
+                ];
+                colors.forEach((color, i) => {
+                    ctx.fillStyle = color;
+                    ctx.fillRect(1044 * scaleFactor + 82 * scaleFactor * i, window.innerHeight - 81 * scaleFactor, 70 * scaleFactor, 10 * scaleFactor);
+                    ctx.fillStyle = "#414E53";
+                    ctx.fillText(zeroes(i, 2), 1063 * scaleFactor + i * scaleFactor * 82, window.innerHeight - 87 * scaleFactor);
+                });
+                ctx.fillStyle = "#E6EFEA";
+                var radiationUnderCursor = 0;
+                Object.values(objects).forEach(item => {
+                    if (item.value == "r"){
+                        if (mousePos.gameX > item.x + item.box.x1 && mousePos.gameX < item.x + item.box.x2 && mousePos.gameY > item.y + item.box.y1 && mousePos.gameY < item.y + item.box.y2){
+                            radiationUnderCursor += item.radStrength;
+                        }
+                    }
+                });
+                radDisplay = radDisplay * 0.9 + radiationUnderCursor * 0.1;
+                ctx.save();
+                ctx.translate(1044 * scaleFactor + (444 - 23 * 2) * scaleFactor * radDisplay, window.innerHeight - 60 * scaleFactor);
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(-10, 15);
+                ctx.lineTo(10, 15);
+                ctx.fill();
+                ctx.restore();
+            }
+
             function drawSidebar(scaleFactor = window.innerWidth / 2560) {
                 var sidebarY = mousePos.realY - sidebarScroll;
                 ctx.strokeStyle = palette.AZKABANGREEN;
-                ctx.lineWidth = 61 * scaleFactor * 2;
+                ctx.lineWidth = 41 * scaleFactor * 2;
                 ctx.strokeRect(0, 0, window.innerWidth, window.innerHeight);
                 var rootWidth = window.innerWidth * 1 / 4.5;
                 inventoryMode = mousePos.realX < rootWidth;
@@ -840,6 +903,7 @@
                 }
 
                 ctx.translate(0, -sidebarScroll);
+                drawRadiometer(scaleFactor);
             }
 
             function drawMessage(scaleFactor = window.innerWidth/2560){
@@ -910,6 +974,14 @@
                 else if (command == "b"){
                     banners[args[0]] = args[1];
                 }
+                else if (command == "█"){
+                    objects[args[0]].box = {
+                        x1: args[1] - 0,
+                        y1: args[2] - 0,
+                        x2: args[3] - 0,
+                        y2: args[4] - 0
+                    };
+                }
                 else if (command == "T"){
                     alert("Game over! It was a tie - nobody was left alive at the end. Pretty L, in my opinion.");
                 }
@@ -943,8 +1015,18 @@
                             y: args[3] - 0,
                             angle: args[4] - 0
                         },
-                        banner: args[6]
+                        banner: args[6],
+                        radStrength: 0.3,
+                        box: {
+                            x1: -100,
+                            y1: -100,
+                            x2: 100,
+                            y2: 100
+                        }
                     };
+                }
+                else if (command == "r"){
+                    objects[args[0] - 0].radStrength = args[1] - 0;
                 }
                 else if (command == "a"){
                     console.log(args);
@@ -954,7 +1036,10 @@
                     mine.push(args[0] - 0);
                 }
                 else if (command == "t"){
-                    totalTicksPassed ++;
+                    totalTicksPassed++;
+                    var timeElapsedSinceStart = window.performance.now() - startTime;
+                    var gTimePerTick = timeElapsedSinceStart / totalTicksPassed;
+                    timePerTick = timePerTick * 0.8 + gTimePerTick * 0.2; // Resist spikes
                     counter = args[0] - 0;
                     if (isFirstTick){
                         startTime = window.performance.now();
@@ -982,6 +1067,13 @@
                     obj.angle = args[3] - 0;
                 }
                 else if (command == "d"){
+                    ctx.fillStyle = "red";
+                    var object = objects[args[0] - 0];
+                    if (object.value == "n"){
+                        exploder.x = object.x;
+                        exploder.y = object.y;
+                        exploder.time = 5;
+                    }
                     delete objects[args[0] - 0];
                 }
                 else if (command == "S"){
@@ -994,6 +1086,9 @@
                 }
                 else if (command == "_"){
                     ping = false; // pong.
+                }
+                else if (command == "j"){
+                    jitter += args[0] - 0;
                 }
                 else {
                     console.warn("Got unrecognizable data: " + message.data);
@@ -1044,9 +1139,14 @@
                         if (isStratChange){
                             message.error = false;
                             message.sticky = true;
-                            message.content = "MOVE YOUR SHIPS";
-                            if (wallsRemaining > 0){
-                                message.content += "\nWALLS REMAINING: " + wallsRemaining;
+                            if (inventoryPlace){
+                                message.content = "PLACE YOUR NEW\nGAMEPIECE";
+                            }
+                            else{
+                                message.content = "MOVE YOUR SHIPS";
+                                if (wallsRemaining > 0){
+                                    message.content += "\nWALLS REMAINING: " + wallsRemaining;
+                                }
                             }
                         }
                         else if (counter == 0){
@@ -1067,8 +1167,6 @@
                 ctx.webkitImageSmoothingEnabled = false;
                 ctx.mozImageSmoothingEnabled = false;
                 ctx.imageSmoothingEnabled = false;
-                var timeElapsedSinceStart = window.performance.now() - startTime;
-                var timePerTick = timeElapsedSinceStart/totalTicksPassed;
                 var remainingMillis = timePerTick * counter;
                 remainingHundredthsPretty = Math.floor(remainingMillis/10) % 100;
                 var remainingSecs = Math.floor(remainingMillis/1000);
@@ -1121,8 +1219,13 @@
                 else if (mousePos.gameY < 0) {
                     mousePos.gameY = 0;
                 }
+////////////////////////////////////////////////////////////
                 ctx.translate(-cX, -cY);
-
+                var jitterX = Math.round(Math.random() * jitter);
+                var jitterY = Math.round(Math.random() * jitter);
+                jitter *= 0.95;
+                ctx.translate(jitterX, jitterY);
+////////////////////////////////////////////////////////////
                 ctx.strokeStyle = palette.MIDGREEN;
                 ctx.setLineDash([40, 10]);
                 ctx.fillStyle = palette.DARKGREEN;
@@ -1146,10 +1249,12 @@
                         ctx.arc(object.x, object.y, 5, 0, Math.PI * 2);
                         ctx.fill();
                     }
-                    /*else if (object.value == "w"){
-                        ctx.fillStyle = "grey";
-                        ctx.fillRect(object.x - 15, object.y - 15, 30, 30);
-                    }*/
+                    else if (object.value == "r"){
+                        /*ctx.fillStyle = "green";
+                        ctx.globalAlpha = object.radStrength;
+                        ctx.fillRect(object.x + object.box.x1, object.y + object.box.y1, object.box.x2 - object.box.x1, object.box.y2 - object.box.y1);
+                        ctx.globalAlpha = 1;*/
+                    }
                     else if (object.value == "C"){
                         ctx.fillStyle = "pink";
                         ctx.fillRect(object.x - 15, object.y - 15, 30, 10);
@@ -1204,6 +1309,11 @@
                         ctx.stroke();
                     }
                 });
+                if (exploder.time > 0){
+                    exploder.time --;
+                    ctx.fillStyle = "red";
+                    ctx.fillRect(exploder.x - 100, exploder.y - 100, 200, 200);
+                }
                 if (isStratChange){
                     if (selected) {
                         if (angleAdjustMode) {
@@ -1222,7 +1332,10 @@
                     hovered = undefined;
                     inventoryPlace = undefined;
                 }
+/////////////////////////////////////////////////////////
                 ctx.translate(cX, cY);
+                ctx.translate(-jitterX, -jitterY);
+/////////////////////////////////////////////////////////
                 if (keysDown["ArrowUp"]){
                     yv -= 5;
                 }
@@ -1290,9 +1403,14 @@
                             inventoryMode = false;
                         }
                         else if (inventoryPlace) {
-                            if (canPlaceWall) {
-                                connection.send("p" + inventoryPlace + " " + mousePos.gameX + " " + mousePos.gameY);
+                            if (inventoryMode){
                                 inventoryPlace = undefined;
+                            }
+                            else{
+                                if (canPlaceWall) {
+                                    connection.send("p" + inventoryPlace + " " + mousePos.gameX + " " + mousePos.gameY);
+                                    inventoryPlace = undefined;
+                                }
                             }
                         }
                         else if (isStratChange){
