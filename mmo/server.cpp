@@ -39,6 +39,8 @@ int autonomousMaxPlayers = 0;
 int autonomousStartTimer = 0;
 int autonomousTimer = 0;
 
+unsigned int terrainSeed;
+
 std::vector<std::string> banners;
 
 void broadcast(std::string broadcast);
@@ -707,7 +709,7 @@ struct Client {
     }
 
     void metadata(){
-        sendText("m" + std::to_string(gameSize) + " " + serverName);
+        sendText("m" + std::to_string(gameSize) + " " + std::to_string(terrainSeed));
         for (GameObject* obj : objects){
             sendObject(obj);
         }
@@ -936,6 +938,7 @@ void randomObject(){
 long newObjectTTL = 300;
 
 void reset(){
+    terrainSeed = rand();
     for (Client* cli : clients){
         delete cli;
     }
@@ -1279,6 +1282,7 @@ int main(int argc, char** argv){
     }
     FILE* random = fopen("/dev/urandom", "r");
     srand(fgetc(random));
+    terrainSeed = rand();
     fclose(random);
     code = randCode<16>();
     std::cout << STARTING_SCREEN;

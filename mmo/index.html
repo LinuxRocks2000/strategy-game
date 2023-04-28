@@ -116,15 +116,105 @@
         <img class="preload_img" id="missile_img_mine" src="images/Missile_mine.svg" />
         <img class="preload_img" id="fort_img_enemy" src="images/Fort_enemy.svg" />
         <img class="preload_img" id="fort_img_mine" src="images/Fort_mine.svg" />
-        <img class="preload_img" id="wall_img" src="images/wall.svg" />
+        <img class="preload_img" id="wall_img" src="images/Wall.svg" />
         <img class="preload_img" id="friendly_wall_img" src="images/Extra_wall_friendly.svg" />
         <img class="preload_img" id="not_connected" src="images/notConnectedIndicator.svg" />
         <img class="preload_img" id="connected" src="images/connectedIndicator.svg" />
         <img class="preload_img" id="error" src="images/error.svg" />
         <img class="preload_img" id="info" src="images/info.svg" />
         <canvas id="game" style="display: none;">
-
+            Get a real browser that supports canvas, please!
         </canvas>
+        <canvas id="preload_terrain" style="display: none;"></canvas>
+        <script>
+            function mulberry32(a) {
+                return function () {
+                    var t = a += 0x6D2B79F5;
+                    t = Math.imul(t ^ t >>> 15, t | 1);
+                    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+                    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+                }
+            }
+
+            var sRand = mulberry32(10);
+
+            function longest(hots){
+                var l = 0;
+                hots.forEach(one => {
+                    hots.forEach(two => {
+                        if (two == one){
+                            return;
+                        }
+                        var dX = one.x - two.x;
+                        var dY = one.y - two.y;
+                        var dist = dX * dX + dY * dY;
+                        if (dist > l){
+                            l = dist;
+                        }
+                    });
+                });
+                return Math.sqrt(l);
+            }
+            function nearDist(thing, hots){
+                var ret = Infinity;
+                hots.forEach(hot => {
+                    var dX = thing.x - hot.x;
+                    var dY = thing.y - hot.y;
+                    var dist = dX * dX + dY * dY;
+                    if (dist < ret) {
+                        ret = dist;
+                    }
+                });
+                return Math.sqrt(ret);
+            }
+            var colors = [
+                "red",
+                "pink",
+                "orange",
+                "yellow",
+                "white",
+                "green",
+                "blue"
+            ];
+            function clarkeSquares(size, cellSize = 50, numHots = 100){
+                var hotPoints = [];
+                for (var i = 0; i < numHots; i ++) {
+                    hotPoints.push({
+                        x: Math.round(sRand() * size/cellSize),
+                        y: Math.round(sRand() * size/cellSize)
+                    });
+                }
+                var percenter = Math.sqrt(size/cellSize) * 1;
+                var clarkeSquares = [];
+                for (var x = 0; x < size / cellSize; x++) {
+                    var thing = [];
+                    for (var y = 0; y < size / cellSize; y++) {
+                        thing.push(nearDist({x: x, y: y}, hotPoints)/percenter);
+                    }
+                    clarkeSquares.push(thing);
+                }
+                return clarkeSquares;
+            }
+            function getTerrainContext(size){
+                var canvas = document.getElementById("preload_terrain");
+                canvas.width = size;
+                canvas.height = size;
+                return canvas.getContext("2d");
+            }
+            function drawClarkeSquares(ctx, squares, squareSize = 50){
+                console.log(squares);
+                squares.forEach((outer, x) => {
+                    outer.forEach((square, y) => {
+                        square = 1 - square;
+                        var r = 150 * square;
+                        var g = 100 * square;
+                        var b = 255 * square;
+                        ctx.fillStyle = "rgb(" + r + "," + g + "," + b + ")";
+                        ctx.fillRect(x * squareSize, y * squareSize, squareSize, squareSize);
+                    });
+                });
+            }
+        </script>
         <div id="notConnected">Not Connected!<br>Reload the page.</div>
         <script>
             const PI = Math.PI;
@@ -147,6 +237,7 @@
                 }
                 return error;
             }
+
             var canvas = document.getElementById("game");
             var ctx = canvas.getContext("2d");
 
@@ -263,7 +354,8 @@
                 message: {
                     error: document.getElementById("error"),
                     info: document.getElementById("info")
-                }
+                },
+                background: document.getElementById("preload_terrain")
             };
             var palette = {
                 GREEN: "#00FF00",
@@ -290,7 +382,7 @@
                     ctx.stroke();
                 },
                 w () {
-                    ctx.drawImage(preloads.wall, -15, -15, 30, 30);
+                    ctx.drawImage(preloads.wall, -25, -25, 50, 50);
                 },
                 W () {
                     ctx.drawImage(preloads.friendlyWall, -40, -40);
@@ -319,7 +411,7 @@
                     ctx.drawImage(cestDeMoi ? preloads.fort[1] : preloads.fort[0], -40, -40);
                     ctx.rotate(-Math.PI / 2);
                 },
-                draw(x, y, angle, thing, isMine = false, scaleDown = true){
+                draw(x, y, angle, thing, isMine = false, scaleDown = true, scaleFactor = window.innerWidth/2560){
                     x = Math.round(x);
                     if (!isMine){
                         ctx.strokeStyle = palette.LIGHTGREEN;
@@ -332,13 +424,13 @@
                     ctx.translate(x, y);
                     ctx.rotate(angle);
                     if (scaleDown){
-                        ctx.scale(window.innerWidth / 2560, window.innerWidth / 2560);
+                        ctx.scale(scaleFactor, scaleFactor);
                     }
                     this[thing](isMine);
                     ctx.restore();
                 },
                 drawObj(object){
-                    this.draw(object.x, object.y, object.angle, object.value, mine.indexOf(object.id) == -1);
+                    this.draw(object.x, object.y, object.angle, object.value, mine.indexOf(object.id) == -1, true, 0.6);
                 }
             };
             document.getElementById("enableNotifs").onclick = () => {
@@ -363,6 +455,8 @@
             }
 
             function drawCompass(compassRootX, compassRootY, size, range = 600){
+                compassRootX += size/2;
+                compassRootY += size/2;
                 ctx.strokeStyle = palette.MIDGREEN;
                 ctx.lineWidth = 4;
                 ctx.beginPath();
@@ -459,7 +553,7 @@
                 ctx.lineWidth = 3;
                 ctx.setLineDash([40, 10]);
                 ctx.strokeRect(rootX, rootY, minimapSize, minimapSize);
-                ctx.fillRect(rootX, rootY, minimapSize, minimapSize);
+                ctx.drawImage(preloads.background, rootX, rootY, minimapSize, minimapSize);//ctx.fillRect(rootX, rootY, minimapSize, minimapSize);
                 ctx.setLineDash([]);
                 ctx.beginPath();
                 const capSize = 50;
@@ -727,6 +821,14 @@
                         }
                     }
                 });
+
+                if (keysDown["c"] && myCastle) {
+                    drawCompass(57 * scaleFactor, 827 * scaleFactor, 439 * scaleFactor);
+                }
+                else {
+                    drawMinimap(57 * scaleFactor, 807 * scaleFactor, 439 * scaleFactor);
+                }
+
                 ctx.translate(0, -sidebarScroll);
             }
 
@@ -815,7 +917,8 @@
                 }
                 else if (command == "m"){
                     gameSize = args[0] - 0;
-                    setName(args[1]);
+                    sRand = mulberry32(args[1] - 0);
+                    drawClarkeSquares(getTerrainContext(gameSize), clarkeSquares(gameSize));
                 }
                 else if (command == "n"){
                     objects[args[1] - 0] = {
@@ -913,6 +1016,41 @@
             });
 
             function mainloop(){
+                message.sticky = false;
+                if (playing) {
+                    var cantPlace = false;
+                    if (!didSelectHome || inventoryPlace == 'F'){
+                        cantPlace = !canPlaceCastle;
+                    }
+                    else if (isStratChange) {
+                        cantPlace = !canPlaceWall;
+                    }
+                    if (cantPlace){
+                        message.error = true;
+                        message.sticky = true;
+                        message.content = "CAN'T PLACE HERE!";
+                    }
+                    else {
+                        if (isStratChange){
+                            message.error = false;
+                            message.sticky = true;
+                            message.content = "MOVE YOUR SHIPS";
+                        }
+                        else if (counter == 0){
+                            message.sticky = true;
+                            message.error = false;
+                            message.content = "WAITING " + (timeToStart > 0 ? "- " + timeToStart : "");
+                        }
+                    }
+                }
+                else {
+                    message.error = false;
+                    message.sticky = true;
+                    message.content = "YOU ARE A SPECTATOR";
+                    if (counter == 0) {
+                        message.content += "\nWAITING FOR GAME START";
+                    }
+                }
                 ctx.webkitImageSmoothingEnabled = false;
                 ctx.mozImageSmoothingEnabled = false;
                 ctx.imageSmoothingEnabled = false;
@@ -976,7 +1114,7 @@
                 ctx.setLineDash([40, 10]);
                 ctx.fillStyle = palette.DARKGREEN;
                 ctx.lineWidth = 3;
-                ctx.fillRect(-2.5, -2.5, gameSize + 5, gameSize + 5);
+                ctx.drawImage(preloads.background, 0, 0);//ctx.fillRect(-2.5, -2.5, gameSize + 5, gameSize + 5);
                 ctx.strokeRect(0, 0, gameSize, gameSize);
                 ctx.setLineDash([]);
                 ctx.fillStyle = "black";
@@ -1100,130 +1238,8 @@
                 if (cY > gameSize - window.innerHeight/2){
                     cY = gameSize - window.innerHeight/2;
                 }
-                styleInfotextMajor();
-                /*if (playing){
-                    if (didSelectHome){
-                        if (counter == 0){
-                            if (timeToStart == -1){
-                                ctx.fillText("Waiting for game start...", window.innerWidth/2, 100);
-                            }
-                            else {
-                                ctx.fillText("Game will start in " + timeToStart, window.innerWidth / 2, 100);
-                            }
-                        }
-                        else if (isStratChange){
-                            timeToStart = -1;
-                            if (inventoryPlace) {
-                                if (canPlaceWall){
-                                    ctx.fillText("Place your new gamepiece...", window.innerWidth / 2, 100);
-                                }
-                                else {
-                                    ctx.fillText("Can't place a gamepiece here.", window.innerWidth / 2, 100);
-                                }
-                            }
-                            else {
-                                ctx.fillText("Move your ships!", window.innerWidth/2, 100);
-                            }
-                            // Ship movement goes here.
-                        }
-                    }
-                    else{
-                        if (canPlaceCastle){
-                            ctx.fillText("Select Your Home Castle", window.innerWidth/2, 100);
-                        }
-                        else{
-                            ctx.fillText("Can't place a castle here!", window.innerWidth / 2, 100);
-                        }
-                    }
-                }
-                else{
-                    if (counter == 0) {
-                        if (timeToStart == -1) {
-                            ctx.fillText("You are a spectator. Waiting for game start...", window.innerWidth / 2, 100);
-                        }
-                        else {
-                            ctx.fillText("You are a spectator. Game will start in " + timeToStart, window.innerWidth / 2, 100);
-                        }
-                    }
-                    else{
-                        ctx.fillText("You are a spectator!", window.innerWidth/2, 100);
-                    }
-                }*/
                 drawSidebar();
                 drawMessage();
-                /*ctx.font = "18px monospace";
-                ctx.textAlign = "left";
-                var mode = "WAITING";
-                if (playing) {
-                    if (myCastle){
-                        ctx.fillText(banners[myCastle.banner], 70, 30);
-                    }
-                    else {
-                        ctx.fillText("PLAYER", 70, 30);
-                    }
-                    if (!didSelectHome){
-                        if (canPlaceCastle){
-                            mode = "PLACE YOUR HOME CASTLE";
-                        }
-                        else {
-                            mode = "CAN'T PLACE A CASTLE HERE";
-                        }
-                    }
-                    else {
-                        if (isStratChange){
-                            if (inventoryPlace) {
-                                if (canPlaceWall) {
-                                    mode = "PLACE YOUR GAMEPIECE";
-                                }
-                                else {
-                                    mode = "CAN'T PLACE A GAMEPIECE HERE";
-                                }
-                            }
-                            else {
-                                mode = "MOVE YOUR SHIPS";
-                            }
-                        }
-                        else if (counter != 0) {
-                            mode = "PLAY MODE";
-                        }
-                    }
-                }
-                else {
-                    ctx.fillText("SPECTATOR", 70, 30);
-                }
-                ctx.font = "16px monospace";
-                ctx.fillText(mode, 70, 60);
-                if (counter == 0){
-                    if (timeToStart == -1){
-                        ctx.fillText("WAITING", 10, 100);
-                    }
-                    else {
-                        ctx.fillText(timeToStart, 10, 100);
-                    }
-                }
-                else {
-                    ctx.fillText(remainingMins + ":" + remainingSecsPretty + ":" + remainingHundredthsPretty, 10, 100);
-                }
-                ctx.font = "16px sans-serif";
-                ctx.fillStyle = "white";
-                ctx.textAlign = "left";
-                ctx.fillText(score, 100, 100);
-                if (myCastle && keysDown["c"]){
-                    drawCompass(window.innerWidth - 160, window.innerHeight - 260 - 125 - 40, 250);
-                }
-                else{
-                    drawMinimap(window.innerWidth - 285, window.innerHeight - 260, 250);
-                }*/
-
-                ctx.fillStyle = palette.RED;
-                //ctx.fillText("Time Left in " + (isStratChange ? "strategy mode" : "play mode") + ": " + counter, 50, 100);
-                if (wallsRemaining > 0){
-                    ctx.textAlign = "right";
-                    if (!canPlaceWall){
-                        //ctx.fillStyle = palette.RED;
-                    }
-                    //ctx.fillText("Remaining walls (" + (canPlaceWall ? "press W to place one!" : "can't place here!") + "): " + wallsRemaining, window.innerWidth - 50, 50);
-                }
                 if (effect == "CRT"){
                     ctx.beginPath();
                     ctx.strokeStyle = "black";
