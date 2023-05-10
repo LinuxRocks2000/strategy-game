@@ -77,11 +77,13 @@
             <div id="menu">
                 Banner (one word only - anything after a space will be ignored; this helps other players identify who's shooting at them and who won):<input type="text" id="banner" /><br />
                 Entry code (leave blank for spectator mode): <input type="text" id="code" /><br/>
+                <input name="RTFMode" id="rtfmode" type="checkbox" />
+                <label for="RTFMode">Real Time Flyer mode?</label><br>
                 <button id="start" onclick="start();">Start</button><br><br>
             </div>
             MMOSG (Massively Multiplayer Online Strategy Game) is a video game developed by Tyler Clarke and several other peopl. It is the sequel to Strategy Game and is meant to host as many players as wish to join each other in friendly combat.
             It is played on a large board (usually 5000x5000 pixels, although it can be any size). When you enter the game, you may place a castle, and then you wait until the DM (the person controlling the server) begins the game.
-            <i>Game concept and development by Tyler Clarke. Client UI design and art by ThatLittleFrog (I don't know their truename).</i>
+            <br><i>Game concept and development by Tyler Clarke. Client UI design and art by ThatLittleFrog (I don't know their truename).</i><br>
             <h2>Basic Controls and Gameplay</h2>
             The arrow keys move you across the board. It's fairly easy to figure out - just press a few buttons, and you'll learn quickly (note: if at any time you start moving up, down, left, or right uncontrollably, press every arrow key and it should go back to normal. It's a browser problem).
             Mouse is how you do most of the actions. Click on the head of a ship you own, and the goal pos controller will stick to your mouse - click again to drop it at a position, and a third time to control the angle.
@@ -218,9 +220,11 @@
                 squares.forEach((outer, x) => {
                     outer.forEach((square, y) => {
                         square = 1 - square;
-                        var r = 150 * square;
-                        var g = 100 * square;
-                        var b = 255 * square;
+                        var lowerColor = [31, 30, 35];
+                        var higherColor = [50, 50, 75];
+                        var r = lowerColor[0] + (higherColor[0] - lowerColor[0]) * square;
+                        var g = lowerColor[1] + (higherColor[1] - lowerColor[1]) * square;
+                        var b = lowerColor[2] + (higherColor[2] - lowerColor[2]) * square;
                         ctx.fillStyle = "rgb(" + r + "," + g + "," + b + ")";
                         ctx.fillRect(x * squareSize, y * squareSize, squareSize, squareSize);
                     });
@@ -307,11 +311,16 @@
             var wallsRemaining = 4;
             var wasPlayMode = false;
             var myCastle = undefined;
+            var teamLeader = false;
+            function isCastle(value){
+                return value == "c" || value == "R";
+            }
             var canPlaceWall = false;
             var inventoryMode = false;
             var inventoryHovered = -1;
             var wallsTurn = 2;
             var banners = {};
+            var teams = {};
             var inventoryPlace = undefined;
             var timeToStart = -1;
             var canPlaceCastle = false;
@@ -328,6 +337,8 @@
             var sidebarScroll = 0;
             var radDisplay = 0;
             var jitter = 0;
+            var isRTF = false;
+            var me = "n";
             var timePerTick = 1000/30; // 30 FPS
             var exploder = {
                 x: 0,
@@ -440,6 +451,18 @@
                     ctx.drawImage(cestDeMoi ? preloads.nuke[1] : preloads.nuke[0], -30, -30);
                     ctx.rotate(-Math.PI / 2);
                 },
+                R(cestDeMoi) {
+                    ctx.rotate(-Math.PI / 2);
+                    ctx.lineWidth = 5;
+                    ctx.strokeStyle = cestDeMoi ? palette.ORANGECREAM : palette.GREEN;
+                    ctx.moveTo(-50, 0);
+                    ctx.lineTo(50, 0);
+                    ctx.lineTo(25, -25);
+                    ctx.moveTo(50, 0);
+                    ctx.lineTo(25, 25);
+                    ctx.stroke();
+                    ctx.rotate(Math.PI / 2);
+                },
                 draw(x, y, angle, thing, isMine = false, scaleDown = true, scaleFactor = window.innerWidth/2560){
                     x = Math.round(x);
                     if (!isMine){
@@ -459,7 +482,11 @@
                     ctx.restore();
                 },
                 drawObj(object){
-                    this.draw(object.x, object.y, object.angle, object.value, mine.indexOf(object.id) == -1, true, 0.6);
+                    var cestDeMoi = mine.indexOf(object.id) == -1;
+                    if (myCastle && teams[myCastle.banner]) {
+                        cestDeMoi = cestDeMoi && teams[object.banner] != teams[myCastle.banner];
+                    }
+                    this.draw(object.x, object.y, object.angle, object.value, cestDeMoi, true, 0.6);
                 }
             };
             document.getElementById("enableNotifs").onclick = () => {
@@ -545,7 +572,7 @@
                             ctx.fill();
                         }
                     }
-                    else if (item.value == "c") {
+                    else if (isCastle(item)) {
                         deltaX = item.x - (cX + compassRootX);
                         deltaY = item.y - (cY + compassRootY);
                         distance2 = deltaX * deltaX + deltaY * deltaY;
@@ -605,7 +632,11 @@
                 ctx.fillStyle = palette.RED;
                 ctx.fillRect(rootX + scaleDown * mousePos.gameX - 2.5, rootY + scaleDown * mousePos.gameY - 2.5, 5, 5);
                 Object.values(objects).forEach(item => {
-                    if (mine.indexOf(item.id) == -1) {
+                    var cestDeMoi = mine.indexOf(item.id) == -1;
+                    if (myCastle && teams[myCastle.banner]) {
+                        cestDeMoi = cestDeMoi && teams[item.banner] != teams[myCastle.banner];
+                    }
+                    if (cestDeMoi) {
                         ctx.fillStyle = palette.ORANGECREAM;
                     }
                     else {
@@ -616,11 +647,18 @@
                     convertedX += rootX;
                     var convertedY = item.y * scaleDown;
                     convertedY += rootY;
-                    if (item.value == "c") {
+                    if (isCastle(item.value)) {
                         ctx.lineWidth = 2;
                         ctx.beginPath();
                         ctx.roundRect(convertedX - 5, convertedY - 5, 10, 10, 2);
                         ctx.stroke();
+                        if (item.value == "R") {
+                            ctx.lineWidth = 2;
+                            ctx.beginPath();
+                            ctx.moveTo(convertedX, convertedY);
+                            ctx.lineTo(convertedX + Math.cos(item.angle - Math.PI / 2) * 10, convertedY + Math.sin(item.angle - Math.PI / 2) * 10);
+                            ctx.stroke();
+                        }
                     }
                     else if (item.value == "f" || item.value == "t" || item.value == "h" || item.value == "n") {
                         ctx.beginPath();
@@ -857,6 +895,9 @@
                 ctx.fillText("SCORE", 316 * scaleFactor, (234 + 30) * scaleFactor);
 
                 // SHOP
+                if (isRTF) {
+                    ctx.globalAlpha = 0.5;
+                }
                 for (var x = 0; x < 3; x ++) {
                     cappedLine(73 * scaleFactor, (443 + x * 103) * scaleFactor, 407 * scaleFactor);
                 }
@@ -880,20 +921,25 @@
                     ctx.fillStyle = "#484D51";
                     ctx.textAlign = "left";
                     ctx.fillText(zeroes(item.cost), x + 130 * scaleFactor, y + 68 * scaleFactor);
-                    if (didSelectHome && playing && isStratChange && score >= item.cost){
-                        if (mousePos.realX > x && mousePos.realX < (x + 203.5 * scaleFactor) && sidebarY > y && sidebarY < (y + 103 * scaleFactor)) {
-                            inventoryHovered = i;
-                            ctx.strokeStyle = "yellow";
-                            ctx.lineWidth = 2;
-                            ctx.strokeRect(x, y, 203.5 * scaleFactor, 103 * scaleFactor);
-                        }
-                        if (inventoryPlace == item.word){
-                            ctx.strokeStyle = "red";
-                            ctx.lineWidth = 4;
-                            ctx.strokeRect(x, y, 203.5 * scaleFactor, 103 * scaleFactor);
+                    if (!isRTF){
+                        if (didSelectHome && playing && isStratChange && score >= item.cost){
+                            if (mousePos.realX > x && mousePos.realX < (x + 203.5 * scaleFactor) && sidebarY > y && sidebarY < (y + 103 * scaleFactor)) {
+                                inventoryHovered = i;
+                                ctx.strokeStyle = "yellow";
+                                ctx.lineWidth = 2;
+                                ctx.strokeRect(x, y, 203.5 * scaleFactor, 103 * scaleFactor);
+                            }
+                            if (inventoryPlace == item.word){
+                                ctx.strokeStyle = "red";
+                                ctx.lineWidth = 4;
+                                ctx.strokeRect(x, y, 203.5 * scaleFactor, 103 * scaleFactor);
+                            }
                         }
                     }
                 });
+                if (isRTF) {
+                    ctx.globalAlpha = 1;
+                }
 
                 if (keysDown["c"] && myCastle) {
                     drawCompass(57 * scaleFactor, 827 * scaleFactor, 439 * scaleFactor);
@@ -948,11 +994,14 @@
                     alert(data.substring(1, data.length));
                 }
                 else if (command == "s"){
-                    console.log("an event was successful");
-                    if (mode == 1){
+                    if (args.length && args[0] == "1"){
+                        teamLeader = true;
+                    }
+                    if (mode == 1) {
                         playing = true;
                         play();
                     }
+                    console.log("an event was successful");
                 }
                 else if (command == "!"){
                     if (timeToStart == -1) {
@@ -973,6 +1022,10 @@
                 }
                 else if (command == "b"){
                     banners[args[0]] = args[1];
+                    if (args.length > 2){
+                        console.log(data);
+                        teams[args[0]] = args[2]; // Team association: the just-set banner is a member of this team
+                    }
                 }
                 else if (command == "█"){
                     objects[args[0]].box = {
@@ -1030,7 +1083,7 @@
                 }
                 else if (command == "a"){
                     console.log(args);
-                    if (objects[args[0] - 0].value == "c"){
+                    if (!myCastle){ // Your castle is always the first object you receive
                         myCastle = objects[args[0] - 0];
                     }
                     mine.push(args[0] - 0);
@@ -1058,6 +1111,9 @@
                     else{
                         isStratChange = false;
                         wasPlayMode = true;
+                    }
+                    if (isRTF){
+                        connection.send("R" + (keysDown["ArrowUp"] ? "1" : "0") + (keysDown["ArrowLeft"] ? "1" : "0") + (keysDown["ArrowRight"] ? "1" : "0") + (keysDown["ArrowDown"] ? "1" : "0") + (keysDown[" "] ? "1" : "0"));
                     }
                 }
                 else if (command == "M"){
@@ -1096,6 +1152,7 @@
             };
             var mode = 0;
             function start(){
+                isRTF = document.getElementById("rtfmode").checked;
                 var banner = document.getElementById("banner").value.trim();
                 var passcode = document.getElementById("code").value.trim();
                 if (passcode.length == 0){
@@ -1104,7 +1161,11 @@
                 if (banner.length == 0){
                     banner = "Player";
                 }
-                connection.send("c" + passcode + " " + banner);
+                me = "k"; // King mode
+                if (isRTF) {
+                    me = "p"; // Pilot mode
+                }
+                connection.send("c" + passcode + " " + banner + " " + me);
                 mode = 1; // waiting for a response
             }
 
@@ -1121,6 +1182,13 @@
             });
 
             function mainloop(){
+                if (isRTF && !isStratChange && counter != 0 && myCastle){
+                    cX = myCastle.x - window.innerWidth / 2;
+                    cY = myCastle.y - window.innerHeight / 2;
+                }
+                if (isRTF){
+                    wallsRemaining = 0; // you can't ever place walls as an RTF
+                }
                 message.sticky = false;
                 if (playing) {
                     var cantPlace = false;
@@ -1143,7 +1211,7 @@
                                 message.content = "PLACE YOUR NEW\nGAMEPIECE";
                             }
                             else{
-                                message.content = "MOVE YOUR SHIPS";
+                                message.content = "MOVE YOUR SHIPS " + (teamLeader ? "YOU ARE TL" : "");
                                 if (wallsRemaining > 0){
                                     message.content += "\nWALLS REMAINING: " + wallsRemaining;
                                 }
@@ -1220,6 +1288,11 @@
                     mousePos.gameY = 0;
                 }
 ////////////////////////////////////////////////////////////
+                if (isRTF && !isStratChange && counter != 0) {
+                    ctx.translate(window.innerWidth/2, window.innerHeight/2);
+                    ctx.rotate(-myCastle.angle);
+                    ctx.translate(-window.innerWidth / 2, -window.innerHeight / 2);
+                }
                 ctx.translate(-cX, -cY);
                 var jitterX = Math.round(Math.random() * jitter);
                 var jitterY = Math.round(Math.random() * jitter);
@@ -1277,11 +1350,18 @@
                         else {
                             ctx.fillStyle = palette.RED;
                             ctx.font = "10px sans-serif";
-                            var size = ctx.measureText(banners[object.banner]);
-                            ctx.fillRect(mousePos.gameX - size.width - 5, mousePos.gameY - 15, size.width + 10, 20);
+                            var team = "Team " + banners[teams[object.banner]];
+                            var size = ctx.measureText(banners[object.banner]).width;
+                            if (team){
+                                size = Math.max(size, ctx.measureText(team).width);
+                            }
+                            ctx.fillRect(mousePos.gameX - size - 5, mousePos.gameY - 15, size + 10, 20 * (team ? 2 : 1));
                             ctx.textAlign = "left";
                             ctx.fillStyle = "black";
-                            ctx.fillText(banners[object.banner], mousePos.gameX - size.width, mousePos.gameY);
+                            ctx.fillText(banners[object.banner], mousePos.gameX - size, mousePos.gameY);
+                            if (team){
+                                ctx.fillText(team, mousePos.gameX - size, mousePos.gameY + 20);
+                            }
                         }
                     }
                     if (object.isEditable && mine.indexOf(object.id) != -1){
@@ -1335,6 +1415,11 @@
 /////////////////////////////////////////////////////////
                 ctx.translate(cX, cY);
                 ctx.translate(-jitterX, -jitterY);
+                if (isRTF && !isStratChange && counter != 0) {
+                    ctx.translate(window.innerWidth / 2, window.innerHeight / 2);
+                    ctx.rotate(myCastle.angle);
+                    ctx.translate(-window.innerWidth / 2, -window.innerHeight / 2);
+                }
 /////////////////////////////////////////////////////////
                 if (keysDown["ArrowUp"]){
                     yv -= 5;

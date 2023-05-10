@@ -7,6 +7,7 @@
     Every time something changes, all the connected Clients are sent some information on what happened, such as
 */
 
+#define PI 3.141592
 
 #define CROW_ENFORCE_WS_SPEC
 #include <crow.h>
@@ -20,7 +21,7 @@
 #include "logo.h"
 #include "terminalstuff.hpp"
 #include <signal.h>
-#define PI 3.141592
+#include "vector.hpp"
 #define FPS 30
 const float ALLOWED_MICROS_PER_FRAME = 1000000.f/FPS;
 char* code;
@@ -38,12 +39,56 @@ bool isAutonomous = false;
 int autonomousMaxPlayers = 0;
 int autonomousStartTimer = 0;
 int autonomousTimer = 0;
+bool teamMode = false;
 
 unsigned int terrainSeed;
 
 std::vector<std::string> banners;
 
+long clamp (long min, long val, long max){
+    if (val < min){
+        val = min;
+    }
+    if (val > max){
+        val = max;
+    }
+    return val;
+}
+
+struct team {
+    long TLbanner = -1;
+    size_t banner;
+    char* password;
+    bool refPassed = false;
+    ~team(){
+        if (!refPassed){
+            free(password);
+        }
+    }
+
+    team(team& t){
+        t.refPassed = true;
+        password = t.password;
+        banner = t.banner;
+    }
+
+    team(size_t bann, char* passwd) {
+        banner = bann;
+        password = passwd;
+    }
+};
+
+std::vector<team*> teams;
+
 void broadcast(std::string broadcast);
+
+size_t getTeamOf(size_t banner);
+
+
+void addBanner(std::string thing, size_t team = 0){
+    banners.push_back(thing);
+    broadcast((std::string)"b" + std::to_string(banners.size() - 1) + " " + thing + (teamMode ? " " + std::to_string(teams[team] -> banner) : "")); // b = add banner
+}
 
 
 template <int length = 32>
@@ -218,16 +263,51 @@ public:
 
 class CastleObject : public GameObject {
 public:
+    vector velocity;
+    bool isRTF = false;
+    float angularVelocity = 0;
+    long shootCycle = 0;
+
     CastleObject(){
         health = 3;
     }
 
     std::vector<GameObject*> forts;
     void update() {
+        shootCycle --;
         for (size_t f = 0; f < forts.size(); f ++){
             if (forts[f] -> rm){
                 forts.erase(forts.begin() + f);
                 f --;
+            }
+        }
+        if (isRTF){
+            if (velocity.magnitude() > 20){
+                velocity.setMagnitude(20);
+            }
+            x += velocity.x;
+            y += velocity.y;
+            x = coterminal(x, gameSize);
+            y = coterminal(y, gameSize);
+            angle += angularVelocity;
+            angularVelocity *= 0.9;
+            broadcast((std::string)"M" + std::to_string(id) + " " + std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(angle + PI/2));
+        }
+        
+    }
+
+    void rtf(bool forwards, bool left, bool right, bool airbrake, bool shewt){
+        if (airbrake){
+            velocity.setMagnitude(velocity.magnitude() * 0.8);
+        }
+        vector thrust;
+        thrust.setMandA(forwards * 3, angle);
+        velocity += thrust;
+        angularVelocity += (left * -1 + right) * 0.03;
+        if (shewt){
+            if (shootCycle < 0){
+                shootCycle = 15;
+                shoot(angle, 35, 50);
             }
         }
     }
@@ -253,7 +333,7 @@ public:
     }
 
     char identify(){
-        return 'c';
+        return isRTF ? 'R' : 'c';
     }
 };
 
@@ -652,7 +732,8 @@ struct Client {
     CastleObject* deMoi = new CastleObject;
     std::vector <GameObject*> myFighters;
     long score = 0;
-    size_t myBanner = 0;
+    size_t myBanner = -1;
+    size_t myTeam = -1;
 
     void collect(int amount){
         score += amount;
@@ -685,23 +766,55 @@ struct Client {
         processingMutex.lock();
         if (command == 'c'){
             if ((!isAutonomous || (livePlayerCount < autonomousMaxPlayers)) && (args[0] != "_spectator") && (!playing)){ // If it's not autonomous OR the current player count is under max AND the first argument (code) is not spectator mode, and we aren't playing.
-                if (args[0] == code){
-                    terminal.printLn("New player logged in with access code!");
-                    sendText("s"); // SUCCESS
-                    metadata();
-                    is_authorized = true;
-                    livePlayerCount ++;
-                    while (listContains(banners, args[1])){
-                        args[1] += ".copy";
-                    }
-                    banners.push_back(args[1]);
-                    broadcast((std::string)"b" + std::to_string(banners.size() - 1) + " " + args[1]); // b = add banner
-                    myBanner = banners.size() - 1;
-                    terminal.printLn("New banner " + args[1]);
+                while (listContains(banners, args[1])){
+                    args[1] += ".copy";
                 }
-                else{
-                    terminal.printLn("Player failed to log in - has the wrong code?");
-                    sendText("e0"); // ERROR 0 invalid code
+                if (teamMode){
+                    team* theTeam = NULL;
+                    for (team* t : teams){
+                        if (t -> password == args[0]) {
+                            theTeam = t;
+                            break;
+                        }
+                    }
+                    if (theTeam) {
+                        terminal.printLn("New player logged in with valid team " + banners[theTeam -> banner] + " access code.");
+                        sendText("s");
+                        is_authorized = true;
+                        livePlayerCount ++;
+                        addBanner(args[1], theTeam -> banner);
+                        myTeam = theTeam -> banner;
+                        myBanner = banners.size() - 1;
+                        if (theTeam -> TLbanner == -1){
+                            theTeam -> TLbanner = myBanner;
+                            sendText("s1");
+                        }
+                        metadata();
+                        terminal.printLn("New banner " + args[1]);
+                    }
+                    else {
+                        terminal.printLn("Player failed to log in - has the wrong code?");
+                        sendText("e0"); // ERROR 0 invalid code
+                    }
+                }
+                else {
+                    if (args[0] == code){
+                        terminal.printLn("New player logged in with access code!");
+                        sendText("s"); // SUCCESS
+                        is_authorized = true;
+                        livePlayerCount ++;
+                        addBanner(args[1]);
+                        myBanner = banners.size() - 1;
+                        metadata();
+                        terminal.printLn("New banner " + args[1]);
+                    }
+                    else{
+                        terminal.printLn("Player failed to log in - has the wrong code?");
+                        sendText("e0"); // ERROR 0 invalid code
+                    }
+                }
+                if (args[2] == "p"){
+                    deMoi -> isRTF = true;
                 }
             }
             else{
@@ -718,7 +831,9 @@ struct Client {
                         deMoi -> x = std::stoi(args[1]);
                         deMoi -> y = std::stoi(args[2]);
                         add(deMoi);
-                        fighters();
+                        if (!deMoi -> isRTF){
+                            fighters();
+                        }
                     }
                     else{
                         terminal.printLn("Some idiot just tried to hack this system");
@@ -821,6 +936,11 @@ struct Client {
                 long monies = std::abs(std::stoi(args[0]));
                 collect(-monies);
             }
+            else if (command == 'R') {
+                if (deMoi -> isRTF){
+                    deMoi -> rtf(args[0][0] == '1', args[0][1] == '1', args[0][2] == '1', args[0][3] == '1', args[0][4] == '1');
+                }
+            }
         }
         else{
             sendText("e1"); // ERROR 1 premature command
@@ -835,7 +955,13 @@ struct Client {
             obj -> greet();
         }
         for (size_t banner = 0; banner < banners.size(); banner ++){
-            sendText((std::string)"b" + std::to_string(banner) + " " + banners[banner]);
+            size_t t = getTeamOf(banner);
+            if (t != -1){
+                sendText((std::string)"b" + std::to_string(banner) + " " + banners[banner] + " " + std::to_string(teams[t] -> banner));
+            }
+            else {
+                sendText((std::string)"b" + std::to_string(banner) + " " + banners[banner]);
+            }
         }
     }
 
@@ -857,6 +983,7 @@ struct Client {
         if (res >= 0){
             myFighters.erase(myFighters.begin() + res);
             switch (thing -> identify()){
+                case 'R':
                 case 'c':
                     if (thing -> killer != NULL && thing -> killer -> owner != NULL){
                         if (thing -> killer -> owner != this){
@@ -1095,6 +1222,11 @@ void reset(){
     playing = false;
     banners.clear();
     autonomousTimer = 0;
+    teamMode = false;
+    for (team* t : teams){
+        delete t;
+    }
+    teams.clear();
 }
 
 void start() {
@@ -1120,6 +1252,32 @@ void tick(){
     if (!playing){
         return;
     }
+    size_t winner = -1;
+    for (Client* cli : clients){
+        if (cli -> is_authorized){
+            if (winner == -1){
+                winner = cli -> myTeam;
+            }
+            else {
+                if (winner != cli -> myTeam){
+                    winner = -1;
+                    break;
+                }
+            }
+        }
+    }
+    if (winner != -1){
+        for (Client* cli : clients){
+            if (cli -> is_authorized && (cli -> myTeam == winner)) {
+                cli -> sendText("W");
+            }
+            else {
+                cli -> sendText("E" + std::to_string(winner));
+            }
+        }
+        terminal.printLn("\033[32mThe game ended with a winner! Resetting.\033[0m");
+        reset();
+    }
     if (livePlayerCount == 1){
         long winningBanner = -1;
         for (Client* cli : clients){
@@ -1136,7 +1294,7 @@ void tick(){
         terminal.printLn("\033[32mThe game ended with a winner! Resetting.\033[0m");
         reset();
     }
-    else if (livePlayerCount == 0){
+    if (livePlayerCount == 0){
         for (Client* cli : clients){
             cli -> sendText("T"); // The game was a tie.
         }
@@ -1177,7 +1335,7 @@ void tick(){
                 if (objects[x] -> box().check(objects[y] -> box())){
                     char xWord = objects[x] -> identify();
                     char yWord = objects[y] -> identify();
-                    if (xWord == 'c' || xWord == 'F'){
+                    if (xWord == 'c' || xWord == 'R' || xWord == 'F'){
                         // If the collision root object is a castle or fort
                         if ((yWord == 'b') || (yWord == 'h') || (yWord == 'n') || (yWord == 'r')) {
                             collided = true;
@@ -1188,8 +1346,8 @@ void tick(){
                         // bullets collide with everything.
                         collided = true;
                     }
-                    else if (xWord == 'w'){
-                        if (yWord != 'c' && yWord != 'F'){
+                    else if (xWord == 'w' || xWord == 'C'){
+                        if (yWord != 'c' && yWord != 'R' && yWord != 'F'){
                             collided = true;
                         }
                     }
@@ -1197,7 +1355,7 @@ void tick(){
                         collided = true; // They hit *everything*
                     }
                     else { // If it's anything else, it's a fighter.
-                        if (yWord != 'c'){
+                        if (yWord != 'c' && yWord != 'R'){
                             collided = true;
                         }
                     }
@@ -1226,9 +1384,8 @@ bool isPasswordChange = false;
 
 
 void* interactionThread(void* _){
-    terminal.init(6);
+    terminal.init(7);
     terminal.noncanonical();
-    int terminalMode = 0;
     terminal.prompt = ": ";
     while (true){
         terminal[0] = (std::string)"\033[34m[ Living players] \033[0m\033[1m" + std::to_string(livePlayerCount) + "\033[0m";
@@ -1237,109 +1394,85 @@ void* interactionThread(void* _){
         terminal[3] = (std::string)"\033[91m[ Total object count] \033[0m\033[1m" + std::to_string(objects.size()) + "\033[0m";
         terminal[4] = (std::string)"[ Current Game Size ] " + std::to_string(gameSize);
         terminal[5] = (std::string)"\033[36m[ Password ] \033[0m\033[1m" + code + "\033[0m";
+        if (playing){
+            terminal[6] = (std::string)"[ MODE ] " + (stratChangeMode ? "Strategy Change" : "Play");
+        }
+        else {
+            terminal[6] = "[ MODE ] Waiting";
+        }
         terminal.update();
         if (terminal.hasLine()){
             std::string command = terminal.getLine();
-            if (terminalMode == 0){
-                if (command == "start"){
-                    start();
-                }
-                else if (command == "exit" || command == "quit"){
-                    break;
-                }
-                else if (command == "change password"){
-                    terminalMode = 1;
-                    terminal.prompt = "Enter new password: ";
-                }
-                else if (command == "data"){
-                    std::map <char, long> breakdown;
-                    terminal.printLn("--- Client and Castle information ---");
-                    for (size_t i = 0; i < clients.size(); i ++) {
-                        Client* client = clients[i];
-                        if (client -> deMoi){
-                            terminal.printLn("Client " + std::to_string(i) + " owns a castle at (" + std::to_string(client -> deMoi -> x) + ", " + std::to_string(client -> deMoi -> y) + "), with banner " + std::to_string(client -> myBanner) + " (sign " + banners[client -> myBanner] + ")." );
-                        }
-                        else {
-                            terminal.printLn("Client " + std::to_string(i) + " (banner " + std::to_string(client -> myBanner) + ", sign " + banners[client -> myBanner] + ") does not own a castle.");
-                        }
-                    }
-                    for (size_t i = 0; i < objects.size(); i ++) {
-                        GameObject* obj = objects[i];
-                        char sign = obj -> identify();
-                        if (breakdown.contains(sign)){
-                            breakdown[sign] ++;
-                        }
-                        else{
-                            breakdown[sign] = 1;
-                        }
-                    }
-                    terminal.printLn("--- Breakdown of objects by callsign (c = Castle, f = Fighter, t = Tiefighter, s = Sniper, b = Bullet, w = Wall, C = chest) ---");
-                    for (std::pair<const char, long>& object : breakdown){
-                        //terminal.printLn("I hope mabel is ok :(");
-                        terminal.printLn(object.first + (std::string)": " + std::to_string(object.second));
-                    }
-                }
-                else if (command == "broadcast"){
-                    terminal.prompt = "Enter message to broadcast: ";
-                    terminalMode = 2;
-                }
-                else if (command == "resize"){
-                    terminalMode = 3;
-                    terminal.prompt = "Enter the new size of the game board: ";
-                }
-                else if (command == "reset"){
-                    reset();
-                    terminal.printLn("### SERVER RESET ###");
-                }
-                else if (command == "clear unowned"){
-                    for (size_t i = 0; i < objects.size(); i ++){
-                        if (objects[i] -> owner == NULL){
-                            delete objects[i];
-                            objects.erase(objects.begin() + i);
-                            i --;
-                        }
-                    }
-                }
-                else if (command == "skip stage"){
-                    counter = 1;
-                }
-                else if (command == "drop client"){
-                    terminal.prompt = "Enter client number to drop: ";
-                    terminalMode = 4;
-                }
-                else if (command == "autonomous"){
-                    terminal.prompt = "Enter autonomous configuration in format <max players>+<tick times to join>: ";
-                    terminalMode = 5;
-                }
-                else {
-                    terminal.printLn("\033[31mUnrecognized command!\033[0m");
-                }
+            if (command == "start"){
+                start();
             }
-            else if (terminalMode == 1){
+            else if (command == "exit" || command == "quit"){
+                break;
+            }
+            else if (command == "change password"){
+                std::string password = terminal.input("New password: ");
                 free(code);
-                code = (char*)malloc(command.size() + 1);
-                for (size_t i = 0; i < command.size(); i ++){
-                    code[i] = command[i];
+                code = (char*)malloc(password.size() + 1);
+                for (size_t i = 0; i < password.size(); i ++){
+                    code[i] = password[i];
                 }
-                code[command.size()] = 0;
-                terminalMode = 0;
-                terminal.prompt = ": ";
+                code[password.size()] = 0;
             }
-            else if (terminalMode == 2){
-                broadcast("B" + command);
-                terminal.prompt = ": ";
-                terminalMode = 0;
+            else if (command == "data"){
+                std::map <char, long> breakdown;
+                terminal.printLn("--- Client and Castle information ---");
+                for (size_t i = 0; i < clients.size(); i ++) {
+                    Client* client = clients[i];
+                    if (client -> deMoi){
+                        terminal.printLn("Client " + std::to_string(i) + " owns a castle at (" + std::to_string(client -> deMoi -> x) + ", " + std::to_string(client -> deMoi -> y) + "), with banner " + std::to_string(client -> myBanner) + " (sign " + banners[client -> myBanner] + ")." );
+                    }
+                    else {
+                        terminal.printLn("Client " + std::to_string(i) + " (banner " + std::to_string(client -> myBanner) + ", sign " + banners[client -> myBanner] + ") does not own a castle.");
+                    }
+                }
+                for (size_t i = 0; i < objects.size(); i ++) {
+                    GameObject* obj = objects[i];
+                    char sign = obj -> identify();
+                    if (breakdown.contains(sign)){
+                        breakdown[sign] ++;
+                    }
+                    else{
+                        breakdown[sign] = 1;
+                    }
+                }
+                terminal.printLn("--- Breakdown of objects by callsign (c = Castle, f = Fighter, t = Tiefighter, s = Sniper, b = Bullet, w = Wall, C = chest) ---");
+                for (std::pair<const char, long>& object : breakdown){
+                    //terminal.printLn("I hope mabel is ok :(");
+                    terminal.printLn(object.first + (std::string)": " + std::to_string(object.second));
+                }
             }
-            else if (terminalMode == 3){
-                gameSize = std::stoi(command);
+            else if (command == "broadcast"){
+                broadcast("B" + terminal.input("Enter message to broadcast: "));
+            }
+            else if (command == "resize"){
+                gameSize = std::stoi(terminal.input("Enter the new gameboard size: "));
                 for (Client* cli : clients){
                     cli -> metadata(); // metadata changed - rebroadcast
                 }
-                terminalMode = 0;
-                terminal.prompt = ": ";
             }
-            else if (terminalMode == 4){
-                size_t toKill = std::stoi(command);
+            else if (command == "reset"){
+                reset();
+                terminal.printLn("### SERVER RESET ###");
+            }
+            else if (command == "clear unowned"){
+                for (size_t i = 0; i < objects.size(); i ++){
+                    if (objects[i] -> owner == NULL){
+                        delete objects[i];
+                        objects.erase(objects.begin() + i);
+                        i --;
+                    }
+                }
+            }
+            else if (command == "skip stage"){
+                counter = 1;
+            }
+            else if (command == "drop client"){
+                size_t toKill = std::stoi(terminal.input("Client number to drop: "));
                 for (size_t i = 0; i < objects.size(); i ++){
                     if (objects[i] -> owner == clients[toKill]){
                         delete objects[i];
@@ -1347,24 +1480,49 @@ void* interactionThread(void* _){
                         i --;
                     }
                 }
+                clientListMutex.lock();
                 delete clients[toKill];
                 clients.erase(clients.begin() + toKill);
-                terminalMode = 0;
-                terminal.prompt = ": ";
+                clientListMutex.unlock();
             }
-            else if (terminalMode == 5){
-                std::vector<std::string> autoInfo = splitString(command, '+');
-                if (autoInfo.size() == 2){
-                    isAutonomous = true;
-                    autonomousMaxPlayers = std::stoi(autoInfo[0]);
-                    autonomousStartTimer = std::stoi(autoInfo[1]);
-                    terminal.printLn("Succesfully configured the server to autonomously begin play " + autoInfo[1] + " ticks after the minimum 2 players (non-negotiable) have connected. Maximum number of players has been set to " + autoInfo[0] + ".");
+            else if (command == "autonomous"){
+                autonomousMaxPlayers = std::stoi(terminal.input("Enter the maximum number of autonomous players: "));
+                autonomousStartTimer = std::stoi(terminal.input("Enter the autonomous start timeout: "));
+            }
+            else if (command == "teams"){
+                terminal.printLn("=======\nBeginning Team Wizard\n=======");
+                std::string it;
+                while (true) {
+                    it = terminal.input("Next team name ('done' to end): ");
+                    std::string pass = terminal.input("Team password (empty for random): ");
+                    char* password;
+                    if (pass == ""){
+                        password = randCode<6>();
+                    }
+                    else {
+                        password = (char*)malloc(pass.size() + 1);
+                        password[pass.size()] = 0;
+                        for (size_t x = 0; x < pass.size(); x ++){
+                            password[x] = pass[x];
+                        }
+                    }
+                    if (it == "done"){
+                        break;
+                    }
+                    else {
+                        addBanner(it);
+                        team* t = new team {
+                            banners.size() - 1,
+                            password
+                        };
+                        teams.push_back(t);
+                        terminal.printLn("New team " + banners[t -> banner] + " created with password " + t -> password);
+                    }
                 }
-                else {
-                    terminal.printErr("Invalid arguments to autonomous!");
-                }
-                terminalMode = 0;
-                terminal.prompt = ": ";
+                teamMode = true;
+            }
+            else {
+                terminal.printLn("\033[31mUnrecognized command!\033[0m");
             }
         }
         usleep(50000); // 20 hertz update rate - shouldn't murder my computer
@@ -1399,6 +1557,16 @@ void broadcast(std::string broadcast) {
     for (Client* cli : clients){
         cli -> sendText(broadcast);
     }
+}
+
+
+size_t getTeamOf(size_t banner){
+    for (Client* cli : clients){
+        if (banner == cli -> myBanner){
+            return cli -> myTeam;
+        }
+    }
+    return -1;
 }
 
 

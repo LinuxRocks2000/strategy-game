@@ -130,4 +130,20 @@ public:
             return "";
         }
     }
+
+    std::string waitForLine() {
+        while (!hasLine()){
+            update();
+            usleep(50000);
+        }
+        return getLine();
+    }
+
+    std::string input(std::string pr){
+        std::string oldPrompt = prompt;
+        prompt = pr;
+        std::string ret = waitForLine();
+        prompt = oldPrompt;
+        return ret;
+    }
 };
