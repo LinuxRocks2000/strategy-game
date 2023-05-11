@@ -272,6 +272,11 @@ public:
         health = 3;
     }
 
+    void enableRTF(){
+        health = 2;
+        isRTF = true;
+    }
+
     std::vector<GameObject*> forts;
     void update() {
         shootCycle --;
@@ -814,7 +819,7 @@ struct Client {
                     }
                 }
                 if (args[2] == "p"){
-                    deMoi -> isRTF = true;
+                    deMoi -> enableRTF();
                 }
             }
             else{
@@ -1335,9 +1340,14 @@ void tick(){
                 if (objects[x] -> box().check(objects[y] -> box())){
                     char xWord = objects[x] -> identify();
                     char yWord = objects[y] -> identify();
-                    if (xWord == 'c' || xWord == 'R' || xWord == 'F'){
+                    if (xWord == 'c' || xWord == 'F'){
                         // If the collision root object is a castle or fort
                         if ((yWord == 'b') || (yWord == 'h') || (yWord == 'n') || (yWord == 'r')) {
+                            collided = true;
+                        }
+                    }
+                    else if (xWord == 'R'){
+                        if ((yWord == 'b') || (yWord == 'h') || (yWord == 'n') || (yWord == 'r') || (yWord == 'C') || (yWord == 'w')) {
                             collided = true;
                         }
                     }
@@ -1347,7 +1357,7 @@ void tick(){
                         collided = true;
                     }
                     else if (xWord == 'w' || xWord == 'C'){
-                        if (yWord != 'c' && yWord != 'R' && yWord != 'F'){
+                        if (yWord != 'c' && yWord != 'F'){
                             collided = true;
                         }
                     }
