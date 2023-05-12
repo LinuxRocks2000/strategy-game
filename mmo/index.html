@@ -1436,16 +1436,16 @@
                     ctx.translate(-window.innerWidth / 2, -window.innerHeight / 2);
                 }
 /////////////////////////////////////////////////////////
-                if (keysDown["ArrowUp"]){
+                if (keysDown["ArrowUp"] || keysDown["W"]){
                     yv -= 5;
                 }
-                if (keysDown["ArrowDown"]){
+                if (keysDown["ArrowDown"] || keysDown["S"]){
                     yv += 5;
                 }
-                if (keysDown["ArrowLeft"]){
+                if (keysDown["ArrowLeft"] || keysDown["A"]){
                     xv -= 5;
                 }
-                if (keysDown["ArrowRight"]){
+                if (keysDown["ArrowRight"] ||  keysDown["D"]){
                     xv += 5;
                 }
                 yv *= 0.8;
