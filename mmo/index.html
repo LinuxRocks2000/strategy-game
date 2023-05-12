@@ -84,28 +84,34 @@
             </div>
             MMOSG (Massively Multiplayer Online Strategy Game) is a video game developed by Tyler Clarke and several other people. It is the sequel to Strategy Game and is meant to host as many players as wish to join each other in friendly combat.
             It is played on a large board (usually 5000x5000 pixels, although it can be any size). When you enter the game, you may place a castle, and then you wait until the DM (the person controlling the server) begins the game.
-            <br><i>Game concept and development by Tyler Clarke. Client UI design and art by ThatLittleFrog (I don't know their truename).</i><br>
+            <br><i>Game concept and development by Tyler Clarke. Client UI design and art by ThatLittleFrog (I don't know their truename). Playtested by Jakie (who rerote the intructions)</i><br>
             <h2>Basic Controls and Gameplay</h2>
             The arrow keys move you across the board. It's fairly easy to figure out - just press a few buttons, and you'll learn quickly (note: if at any time you start moving up, down, left, or right uncontrollably, press every arrow key and it should go back to normal. It's a browser problem).
-            Mouse is how you do most of the actions. Click on the head of a ship you own, and the goal pos controller will stick to your mouse - click again to drop it at a position, and a third time to control the angle.
-            You can move the canvas while moving pieces - this is how you move long distances efficiently.<br>
+            Mouse is how you do most of the actions. Click on the head of a ship you own, drag to where you want it, click again to drop it at a position, and a third time to control the angle.
+            You can move while moving pieces - this is how you move long distances efficiently.<br>
             There are two modes of play - "Move Ships" mode and "Watch" mode, usually known as "strat" and "play" mode. In strat mode, you move your ships and such, and if you haven't already used your entire wall allottment, you can press "w" to create a wall at your mouse position.
             In Watch mode, you can only hope you anticipated your enemy's motions well enough to defend against them, because you can't change your ship positioning. Strat mode lasts ~30 seconds and play mode ~20.<br>
             Most ships shoot bullets at regular intervals. These bullets (little green circles) hit things, destroying themselves and counting one hit towards the thing they hit; you can also hit things by running your ships into them, which will also count one hit. All flyers and bullets will be destroyed after one hit (bullets can hit bullets!), but walls and chests take two hits and castles take three.<br>
-            Pressing "i" opens the inventory, in which you can buy things.<br>
             <b>Warning: Friendly fire is a thing! Your flyers can hit each other, your bullets can hit your flyers and your castle. All bullets and all flyers are approximately equal. I've seen people in a winning position lose because they forgot tie fighters shoot backwards!</b><br><br>
-            Your goal is to destroy all enemy castles. This is a last-man-standing game!
+            Your goal is to destroy all enemy castles. This is a last-man-standing game!<br>
+            
+            <h2>RTF<./h2>
+                Means real time fighter mode. It's pretty easy. All you need to use the arrrow keys. Down is break, Up is forward, and left and right turn. These only have 2 hits compared the normal 3 of castles.<br>
+                There fighter only moves during play. They have 2 other ships they can command and move during strat. 
             <h2>Types</h2>
             There are several types of objects in the game.
             <ul>
                 <li>Castles: These are the large green squares. They're the most important piece, like the King in Chess; they withstand 3 hits.</li>
-                <li>Walls: The little gray squares. Absorb two hits each. You can place a few every turn.</li>
+                <li>Walls: Absorb two hits each. You can place a few every turn.</li>
                 <li>Chests: Little pink-and-orange squares. They absorb two hits each as well, and have similar properties to a wall, except that whoever destroys them gets 50 points.</li>
                 <li>Bullets: The tiny green circles. Destroy things. What else is there to say?</li>
-                <li>Basic Fighters: Purple (pink, if they're on your side) fighters. Shoot single bullets out the front in whatever direction they're facing. You get a few at the start of the game. They're slow and don't have very good bullet range. Cost 10 points in the inventory.</li>
-                <li>Tie Fighters: Basic Fighters, but blue and with small extensions. Shoot two bullets - one out the front, one out the back. Slightly faster than Basic Fighters. Hazardous. Cost 20 points in the inventory.</li>
-                <li>Snipers: Skinny black fighters. Move very fast, are very controlled, and shoot much less often but have much higher range than the other fighters. Cost 30 points in the inventory.</li>
-                <li>Hypersonic Missiles: Tiny ships with a similar design to enemies in the original Strategy Game: a small circle with a line extending well beyond it indicating direction. They don't shoot, but they move fast - good for dueling, because of how wide an area their swoops cover. Cost 5 points in the inventory (and they're barely worth it. Scutting little monsters.)</li>
+                <li>Basic Fighters:Shoot single bullets out the front in whatever direction they're facing. You get a few at the start of the game. They're slow and don't have very good bullet range. Cost 10 points in the inventory.</li>
+                <li>Tie Fighters: Shoot two bullets - one out the front, one out the back. Slightly faster than Basic Fighters. Hazardous. Cost 20 points in the inventory.</li>
+                <li>Snipers:  Move very fast, are very controlled, and shoot much less often but have much higher range than the other fighters. Cost 30 points in the inventory.</li>
+                <li>Hypersonic Missiles: Tiny ships that don't shoot, but they move fast - good for dueling, because of how wide an area their swoops cover. Cost 5 points in the inventory</li>
+                <li>Turrets: They fire at all ships in site. They protect the castle</li>
+                <li>Nukes: Overpowered little things. Not as fast as missiles, more scary however. Be afraid</li>
+                <li>Forts: These are like mini castles. If your castle dies one of these becomes your new castle. If you don't have any... Too bad for you</li>
             </ul>
         </div>
         <img class="preload_img" id="basic_fighter_img_enemy" src="images/Fighter_enemy.svg" />
