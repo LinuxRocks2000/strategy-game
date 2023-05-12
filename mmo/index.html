@@ -77,8 +77,11 @@
             <div id="menu">
                 Banner (one word only - anything after a space will be ignored; this helps other players identify who's shooting at them and who won):<input type="text" id="banner" /><br />
                 Entry code (leave blank for spectator mode): <input type="text" id="code" /><br/>
-                <input name="RTFMode" id="rtfmode" type="checkbox" />
-                <label for="RTFMode">Real Time Flyer mode?</label><br>
+                <select id="startingArrangment">
+                    <option value="k">Default - Castle, x4 fighters</option>
+                    <option value="p">RTF - Real Time Fighter, x2 fighters</option>
+                    <option value="d">Defensive - Castle, +2 walls, x2 fighters, x2 turrets</option>
+                </select>
                 <button id="start" onclick="start();">Start</button><br><br>
                 <!--<i>Like this game? Support its development on <a href="patreon.com/user?u=91980627">Patreon</a>!</i>-->
             </div>
@@ -306,6 +309,7 @@
             var cY = 0;
             var xv = 0;
             var yv = 0;
+            var drawCallsThisTick = 0;
             var gameSize = 0;
             var keysDown = {};
             var didSelectHome = false;
@@ -346,6 +350,7 @@
             var jitter = 0;
             var isRTF = false;
             var me = "n";
+            var arrangment = "";
             var timePerTick = 1000/30; // 30 FPS
             var exploder = {
                 x: 0,
@@ -461,7 +466,7 @@
                 R(cestDeMoi) {
                     ctx.rotate(-Math.PI / 2);
                     ctx.lineWidth = 5;
-                    ctx.strokeStyle = cestDeMoi ? palette.ORANGECREAM : palette.GREEN;
+                    ctx.beginPath();
                     ctx.moveTo(-50, 0);
                     ctx.lineTo(50, 0);
                     ctx.lineTo(25, -25);
@@ -487,6 +492,7 @@
                     }
                     this[thing](isMine);
                     ctx.restore();
+                    drawCallsThisTick++;
                 },
                 drawObj(object){
                     var cestDeMoi = mine.indexOf(object.id) == -1;
@@ -672,7 +678,7 @@
                         ctx.arc(convertedX, convertedY, 2, 0, Math.PI * 2);
                         ctx.fill();
                     }
-                });
+                }); mousePos.realY
             }
 
             var inventoryStuff = [
@@ -1159,7 +1165,13 @@
             };
             var mode = 0;
             function start(){
-                isRTF = document.getElementById("rtfmode").checked;
+                me = document.getElementById("startingArrangment").value;
+                if (me == "p"){
+                    isRTF = true;
+                }
+                if (me == "d"){
+                    wallsTurn = 4;
+                }
                 var banner = document.getElementById("banner").value.trim();
                 var passcode = document.getElementById("code").value.trim();
                 if (passcode.length == 0){
@@ -1167,10 +1179,6 @@
                 }
                 if (banner.length == 0){
                     banner = "Player";
-                }
-                me = "k"; // King mode
-                if (isRTF) {
-                    me = "p"; // Pilot mode
                 }
                 connection.send("c" + passcode + " " + banner + " " + me);
                 mode = 1; // waiting for a response

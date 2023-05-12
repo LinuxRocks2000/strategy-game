@@ -37,6 +37,7 @@ CleverTerminal terminal;
 
 bool isAutonomous = false;
 int autonomousMaxPlayers = 0;
+int autonomousMinPlayers = 0;
 int autonomousStartTimer = 0;
 int autonomousTimer = 0;
 bool teamMode = false;
@@ -306,9 +307,9 @@ public:
             velocity.setMagnitude(velocity.magnitude() * 0.8);
         }
         vector thrust;
-        thrust.setMandA(forwards * 3, angle);
+        thrust.setMandA(forwards * 2, angle);
         velocity += thrust;
-        angularVelocity += (left * -1 + right) * 0.03;
+        angularVelocity += (left * -1 + right) * 0.02;
         if (shewt){
             if (shootCycle < 0){
                 shootCycle = 15;
@@ -739,6 +740,7 @@ struct Client {
     long score = 0;
     size_t myBanner = -1;
     size_t myTeam = -1;
+    char arrangement = 'k';
 
     void collect(int amount){
         score += amount;
@@ -770,7 +772,7 @@ struct Client {
         std::vector<std::string> args = splitString(message.substr(1, message.size() - 1), ' ');
         processingMutex.lock();
         if (command == 'c'){
-            if ((!isAutonomous || (livePlayerCount < autonomousMaxPlayers)) && (args[0] != "_spectator") && (!playing)){ // If it's not autonomous OR the current player count is under max AND the first argument (code) is not spectator mode, and we aren't playing.
+            if ((!isAutonomous || (livePlayerCount < autonomousMaxPlayers )) && (args[0] != "_spectator") && (!playing)){ // If it's not autonomous OR the current player count is under max AND the first argument (code) is not spectator mode, and we aren't playing.
                 while (listContains(banners, args[1])){
                     args[1] += ".copy";
                 }
@@ -818,6 +820,7 @@ struct Client {
                         sendText("e0"); // ERROR 0 invalid code
                     }
                 }
+                arrangement = args[2][0];
                 if (args[2] == "p"){
                     deMoi -> enableRTF();
                 }
@@ -836,9 +839,8 @@ struct Client {
                         deMoi -> x = std::stoi(args[1]);
                         deMoi -> y = std::stoi(args[2]);
                         add(deMoi);
-                        if (!deMoi -> isRTF){
-                            fighters();
-                        }
+                        collect(50);
+                        fighters();
                     }
                     else{
                         terminal.printLn("Some idiot just tried to hack this system");
@@ -1102,10 +1104,24 @@ struct Client {
     }
 
     void fighters(){
-        newRelativeFighter(200, 0);
-        newRelativeFighter(-200, 0, PI);
-        newRelativeFighter(0, 200);
-        newRelativeFighter(0, -200);
+        switch (arrangement) {
+            case 'k':
+                newRelativeFighter(200, 0);
+                newRelativeFighter(-200, 0, PI);
+                newRelativeFighter(0, 200);
+                newRelativeFighter(0, -200);
+                break;
+            case 'p':
+                newRelativeFighter(100, 0, PI/2);
+                newRelativeFighter(-100, 0, PI/2);
+                break;
+            case 'd':
+                newRelativeFighter(200, 0);
+                newRelativeFighter(-200, 0, PI);
+                newRelativeThing<TurretObject>(0, -200);
+                newRelativeThing<TurretObject>(0, 200);
+                break;
+        }
         //newRelativeSniper(100, 0, PI/2);
         //newRelativeTiefighter(0, 100);
         //newRelativeTiefighter(0, -100, PI);
@@ -1244,7 +1260,7 @@ void start() {
 
 void tick(){
     if (isAutonomous){
-        if (livePlayerCount > 1){
+        if (livePlayerCount >= autonomousMinPlayers){
             autonomousTimer ++;
             if (autonomousTimer == autonomousStartTimer){
                 start();
@@ -1497,7 +1513,9 @@ void* interactionThread(void* _){
             }
             else if (command == "autonomous"){
                 autonomousMaxPlayers = std::stoi(terminal.input("Enter the maximum number of autonomous players: "));
+                autonomousMinPlayers = std::stoi(terminal.input("Enter the minimum number of autonomous players: "));
                 autonomousStartTimer = std::stoi(terminal.input("Enter the autonomous start timeout: "));
+                isAutonomous = true;
             }
             else if (command == "teams"){
                 terminal.printLn("=======\nBeginning Team Wizard\n=======");
