@@ -274,7 +274,7 @@ public:
     }
 
     void enableRTF(){
-        health = 2;
+        health = 3;
         isRTF = true;
     }
 
