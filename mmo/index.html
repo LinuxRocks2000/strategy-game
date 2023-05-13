@@ -1126,7 +1126,7 @@
                         wasPlayMode = true;
                     }
                     if (isRTF){
-                        connection.send("R" + (keysDown["ArrowUp"] ? "1" : "0") + (keysDown["ArrowLeft"] ? "1" : "0") + (keysDown["ArrowRight"] ? "1" : "0") + (keysDown["ArrowDown"] ? "1" : "0") + (keysDown[" "] ? "1" : "0"));
+                        connection.send("R" + ((keysDown["ArrowUp"] || keysDown["w"]) ? "1" : "0") + ((keysDown["ArrowLeft"] || keysDown["a"]) ? "1" : "0") + ((keysDown["ArrowRight"] || keysDown["d"]) ? "1" : "0") + ((keysDown["ArrowDown"] || keysDown["s"]) ? "1" : "0") + (keysDown[" "] ? "1" : "0"));
                     }
                 }
                 else if (command == "M"){
@@ -1436,16 +1436,16 @@
                     ctx.translate(-window.innerWidth / 2, -window.innerHeight / 2);
                 }
 /////////////////////////////////////////////////////////
-                if (keysDown["ArrowUp"]){
+                if (keysDown["ArrowUp"] || keysDown["w"]){
                     yv -= 5;
                 }
-                if (keysDown["ArrowDown"]){
+                if (keysDown["ArrowDown"] || keysDown["s"]){
                     yv += 5;
                 }
-                if (keysDown["ArrowLeft"]){
+                if (keysDown["ArrowLeft"] || keysDown["a"]){
                     xv -= 5;
                 }
-                if (keysDown["ArrowRight"]){
+                if (keysDown["ArrowRight"] || keysDown["d']){
                     xv += 5;
                 }
                 yv *= 0.8;
