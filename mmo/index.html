@@ -87,9 +87,9 @@
             </div>
             MMOSG (Massively Multiplayer Online Strategy Game) is a video game developed by Tyler Clarke and several other people. It is the sequel to Strategy Game and is meant to host as many players as wish to join each other in friendly combat.
             It is played on a large board (usually 5000x5000 pixels, although it can be any size). When you enter the game, you may place a castle, and then you wait until the DM (the person controlling the server) begins the game.
-            <br><i>Game concept and development by Tyler Clarke. Client UI design and art by ThatLittleFrog (I don't know their truename). Playtested by Jakie (who rerote the intructions)</i><br>
+            <br><i>Game concept and development by Tyler Clarke. Client UI design and art by ThatLittleFrog (I don't know their truename). Playtested by Jakie (who rewrote the intructions)</i><br>
             <h2>Basic Controls and Gameplay</h2>
-            The arrow keys move you across the board. It's fairly easy to figure out - just press a few buttons, and you'll learn quickly (note: if at any time you start moving up, down, left, or right uncontrollably, press every arrow key and it should go back to normal. It's a browser problem).
+            The arrow keys move you across the board. Q is used to place a wall. (note: if at any time you start moving up, down, left, or right uncontrollably, press every arrow key and it should go back to normal. It's a browser problem).
             Mouse is how you do most of the actions. Click on the head of a ship you own, drag to where you want it, click again to drop it at a position, and a third time to control the angle.
             You can move while moving pieces - this is how you move long distances efficiently.<br>
             There are two modes of play - "Move Ships" mode and "Watch" mode, usually known as "strat" and "play" mode. In strat mode, you move your ships and such, and if you haven't already used your entire wall allottment, you can press "w" to create a wall at your mouse position.
@@ -762,7 +762,7 @@
                         inventoryMode = false;
                     }
                 }
-                else if (evt.key == "w"){
+                else if (evt.key == "q"){
                     if (wallsRemaining > 0){
                         if (playing && isStratChange){
                             if (canPlaceWall){
