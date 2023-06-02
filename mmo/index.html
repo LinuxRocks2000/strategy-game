@@ -78,9 +78,9 @@
                 Banner (one word only - anything after a space will be ignored; this helps other players identify who's shooting at them and who won):<input type="text" id="banner" /><br />
                 Entry code (leave blank for spectator mode): <input type="text" id="code" /><br/>
                 <select id="startingArrangment">
-                    <option value="k">Default - Castle, x4 fighters</option>
-                    <option value="p">RTF - Real Time Fighter, x2 fighters</option>
-                    <option value="d">Defensive - Castle, +2 walls, x2 fighters, x2 turrets</option>
+                    <option value="normal">Default - Castle, x4 fighters</option>
+                    <option value="rtf">RTF - Real Time Fighter, x2 fighters</option>
+                    <option value="defender">Defensive - Castle, +2 walls, x2 fighters, x2 turrets</option>
                 </select>
                 <button id="start" onclick="start();">Start</button><br><br>
                 <!--<i>Like this game? Support its development on <a href="patreon.com/user?u=91980627">Patreon</a>!</i>-->
@@ -303,7 +303,8 @@
                 else {
                     bannerNotConnected.style.display = "none";
                 }
-            }, 200);
+            }, 500);
+            const DEBUG = true;
             var playing = false;
             var cX = 0;
             var cY = 0;
@@ -328,6 +329,7 @@
             }
             var canPlaceWall = false;
             var inventoryMode = false;
+            var interpolator = 0;
             var inventoryHovered = -1;
             var wallsTurn = 2;
             var banners = {};
@@ -342,6 +344,7 @@
             var nearestCastleAngle = 0;
             var totalTicksPassed = 0;
             var startTime = 0;
+            var lastTick = 0;
             var remainingHundredthsPretty = 0;
             var remainingSecsPretty = 0;
             var remainingMins = 0;
@@ -352,6 +355,7 @@
             var me = "n";
             var arrangment = "";
             var timePerTick = 1000/30; // 30 FPS
+            var cantPlace = false;
             var exploder = {
                 x: 0,
                 y: 0,
@@ -420,12 +424,11 @@
                 f (cestDeMoi){
                     ctx.rotate(Math.PI/2);
                     ctx.drawImage(cestDeMoi ? preloads.basic_fighter[1] : preloads.basic_fighter[0], -30, -40);
-                    ctx.rotate(-Math.PI / 2);
                 },
                 c (){
                     ctx.lineWidth = 4;
                     ctx.beginPath();
-                    ctx.roundRect(-40, -40, 80, 80, 20);
+                    ctx.roundRect(-40, -40, 80, 80, 12);
                     ctx.stroke();
                 },
                 w () {
@@ -438,7 +441,6 @@
                     ctx.rotate(-Math.PI / 2);
                     var scaleDown = 2/3;
                     ctx.drawImage(cestDeMoi ? preloads.sniper[1] : preloads.sniper[0], -14, -40);
-                    ctx.rotate(Math.PI / 2);
                 },
                 t (cestDeMoi) {
                     ctx.drawImage(cestDeMoi ? preloads.tie_fighter[1] : preloads.tie_fighter[0], -31.5, -40);
@@ -446,22 +448,18 @@
                 T (cestDeMoi) {
                     ctx.rotate(Math.PI / 2);
                     ctx.drawImage(cestDeMoi ? preloads.turret[1] : preloads.turret[0], -37/2, -40);
-                    ctx.rotate(-Math.PI / 2);
                 },
                 h (cestDeMoi) {
                     ctx.rotate(-Math.PI / 2);
                     ctx.drawImage(cestDeMoi ? preloads.missile[1] : preloads.missile[0], -16, -40);
-                    ctx.rotate(Math.PI / 2);
                 },
                 F (cestDeMoi) {
                     ctx.rotate(Math.PI / 2);
                     ctx.drawImage(cestDeMoi ? preloads.fort[1] : preloads.fort[0], -40, -40);
-                    ctx.rotate(-Math.PI / 2);
                 },
                 n(cestDeMoi) {
                     ctx.rotate(Math.PI / 2);
                     ctx.drawImage(cestDeMoi ? preloads.nuke[1] : preloads.nuke[0], -30, -30);
-                    ctx.rotate(-Math.PI / 2);
                 },
                 R(cestDeMoi) {
                     ctx.rotate(-Math.PI / 2);
@@ -473,9 +471,8 @@
                     ctx.moveTo(50, 0);
                     ctx.lineTo(25, 25);
                     ctx.stroke();
-                    ctx.rotate(Math.PI / 2);
                 },
-                draw(x, y, angle, thing, isMine = false, scaleDown = true, scaleFactor = window.innerWidth/2560){
+                draw(x, y, angle, thing, isMine = false, scaleDown = false, scaleFactor = window.innerWidth/2560){
                     x = Math.round(x);
                     if (!isMine){
                         ctx.strokeStyle = palette.LIGHTGREEN;
@@ -495,6 +492,15 @@
                     drawCallsThisTick++;
                 },
                 drawObj(object){
+                    if (DEBUG) {
+                        ctx.save();
+                        ctx.translate(object.x, object.y);
+                        ctx.rotate(object.angle);
+                        ctx.fillStyle = "yellow";
+                        ctx.globalAlpha = 0.3;
+                        ctx.fillRect(-object.w / 2, -object.h / 2, object.w, object.h);
+                        ctx.restore();
+                    }
                     var cestDeMoi = mine.indexOf(object.id) == -1;
                     if (myCastle && teams[myCastle.banner]) {
                         cestDeMoi = cestDeMoi && teams[object.banner] != teams[myCastle.banner];
@@ -521,6 +527,55 @@
                 ctx.fillStyle = palette.RED;
                 ctx.textAlign = "center";
                 ctx.font = "bold 40px monospace";
+            }
+
+            function makeProtocolMessage(command, args) {
+                const OLDMODE = false;
+                var ret = command;
+                args.forEach((item, i) => {
+                    item = item + ""; // Make sure it's a string so we can send numbers safely
+                    if (OLDMODE){
+                        ret += item;
+                        if (i < args.length - 1){
+                            ret += " ";
+                        }
+                    }
+                    else{
+                        ret += String.fromCharCode(item.length);
+                        ret += item;
+                    }
+                });
+                return ret;
+            }
+
+            function sendProtocolMessage(command, args){
+                connection.send(makeProtocolMessage(command, args));
+            }
+
+            function rtfUpgrade(upgrade) {
+                if (isRTF) {
+                    sendProtocolMessage("U", [myCastle.id, upgrade]);
+                }
+            }
+
+            function readProtocolMessage(message) {
+                var ret = {
+                    command: message[0],
+                    args: []
+                };
+                var i = 1;
+                var buffer = "";
+                while (i < message.length) {
+                    var iEnd = i + message.charCodeAt(i);
+                    while (i < iEnd) {
+                        i ++;
+                        buffer += message[i];
+                    }
+                    ret.args.push(buffer);
+                    buffer = "";
+                    i ++;
+                }
+                return ret;
             }
 
             function drawCompass(compassRootX, compassRootY, size, range = 600){
@@ -651,6 +706,9 @@
                     }
                     if (cestDeMoi) {
                         ctx.fillStyle = palette.ORANGECREAM;
+                        if (item.upgrades.indexOf("s") != -1) {
+                            return;
+                        }
                     }
                     else {
                         ctx.fillStyle = palette.LIGHTGREEN;
@@ -724,7 +782,7 @@
                     cbk: () => {
                         if (score >= 30){
                             wallsTurn += 2;
-                            connection.send("C-30")
+                            makeProtocolMessage("C", ["-30"]);
                         }
                     },
                     cost: 30
@@ -762,12 +820,12 @@
                         inventoryMode = false;
                     }
                 }
-                else if (evt.key == "w"){
+                else if (evt.key == "q"){
                     if (wallsRemaining > 0){
                         if (playing && isStratChange){
                             if (canPlaceWall){
                                 wallsRemaining --;
-                                connection.send("pw " + mousePos.gameX + " " + mousePos.gameY);
+                                sendProtocolMessage("p", ["w", mousePos.gameX, mousePos.gameY]);
                             }
                         }
                     }
@@ -841,7 +899,7 @@
                 var radiationUnderCursor = 0;
                 Object.values(objects).forEach(item => {
                     if (item.value == "r"){
-                        if (mousePos.gameX > item.x + item.box.x1 && mousePos.gameX < item.x + item.box.x2 && mousePos.gameY > item.y + item.box.y1 && mousePos.gameY < item.y + item.box.y2){
+                        if (mousePos.gameX > item.x - item.w/2 && mousePos.gameX < item.x + item.w/2 && mousePos.gameY > item.y - item.h/2 && mousePos.gameY < item.y + item.h/2){
                             radiationUnderCursor += item.radStrength;
                         }
                     }
@@ -908,9 +966,6 @@
                 ctx.fillText("SCORE", 316 * scaleFactor, (234 + 30) * scaleFactor);
 
                 // SHOP
-                if (isRTF) {
-                    ctx.globalAlpha = 0.5;
-                }
                 for (var x = 0; x < 3; x ++) {
                     cappedLine(73 * scaleFactor, (443 + x * 103) * scaleFactor, 407 * scaleFactor);
                 }
@@ -934,25 +989,20 @@
                     ctx.fillStyle = "#484D51";
                     ctx.textAlign = "left";
                     ctx.fillText(zeroes(item.cost), x + 130 * scaleFactor, y + 68 * scaleFactor);
-                    if (!isRTF){
-                        if (didSelectHome && playing && isStratChange && score >= item.cost){
-                            if (mousePos.realX > x && mousePos.realX < (x + 203.5 * scaleFactor) && sidebarY > y && sidebarY < (y + 103 * scaleFactor)) {
-                                inventoryHovered = i;
-                                ctx.strokeStyle = "yellow";
-                                ctx.lineWidth = 2;
-                                ctx.strokeRect(x, y, 203.5 * scaleFactor, 103 * scaleFactor);
-                            }
-                            if (inventoryPlace == item.word){
-                                ctx.strokeStyle = "red";
-                                ctx.lineWidth = 4;
-                                ctx.strokeRect(x, y, 203.5 * scaleFactor, 103 * scaleFactor);
-                            }
+                    if (didSelectHome && playing && isStratChange && score >= item.cost){
+                        if (mousePos.realX > x && mousePos.realX < (x + 203.5 * scaleFactor) && sidebarY > y && sidebarY < (y + 103 * scaleFactor)) {
+                            inventoryHovered = i;
+                            ctx.strokeStyle = "yellow";
+                            ctx.lineWidth = 2;
+                            ctx.strokeRect(x, y, 203.5 * scaleFactor, 103 * scaleFactor);
+                        }
+                        if (inventoryPlace == i){
+                            ctx.strokeStyle = "red";
+                            ctx.lineWidth = 4;
+                            ctx.strokeRect(x, y, 203.5 * scaleFactor, 103 * scaleFactor);
                         }
                     }
                 });
-                if (isRTF) {
-                    ctx.globalAlpha = 1;
-                }
 
                 if (keysDown["c"] && myCastle) {
                     drawCompass(57 * scaleFactor, 827 * scaleFactor, 439 * scaleFactor);
@@ -1000,17 +1050,20 @@
             }
 
             connection.onmessage = (message) => {
-                var data = message.data;
-                var command = data[0];
-                var args = data.substring(1, data.length).split(" ");
-                if (data[0] == "B"){
+                //var data = message.data;
+                //var command = data[0];
+                //var args = data.substring(1, data.length).split(" ");
+                var data = readProtocolMessage(message.data);
+                command = data.command;
+                args = data.args;
+                if (command == "B"){
                     alert(data.substring(1, data.length));
                 }
                 else if (command == "s"){
                     if (args.length && args[0] == "1"){
                         teamLeader = true;
                     }
-                    if (mode == 1) {
+                    else if (mode == 1) {
                         playing = true;
                         play();
                     }
@@ -1040,14 +1093,6 @@
                         teams[args[0]] = args[2]; // Team association: the just-set banner is a member of this team
                     }
                 }
-                else if (command == "█"){
-                    objects[args[0]].box = {
-                        x1: args[1] - 0,
-                        y1: args[2] - 0,
-                        x2: args[3] - 0,
-                        y2: args[4] - 0
-                    };
-                }
                 else if (command == "T"){
                     alert("Game over! It was a tie - nobody was left alive at the end. Pretty L, in my opinion.");
                 }
@@ -1069,7 +1114,7 @@
                     drawClarkeSquares(getTerrainContext(gameSize), clarkeSquares(gameSize));
                 }
                 else if (command == "n"){
-                    objects[args[1] - 0] = {
+                    var ob = {
                         value: args[0],
                         id: args[1] - 0,
                         x: args[2] - 0,
@@ -1083,13 +1128,25 @@
                         },
                         banner: args[6],
                         radStrength: 0.3,
-                        box: {
-                            x1: -100,
-                            y1: -100,
-                            x2: 100,
-                            y2: 100
-                        }
+                        w: args[7],
+                        h: args[8],
+                        upgrades: []
                     };
+                    for (var i = 9; i < args.length; i ++) {
+                        console.log(args.length);
+                        ob.upgrades.push(args[i]);
+                    }
+                    ob.g_angle = ob.angle;
+                    ob.g_x = ob.x;
+                    ob.g_y = ob.y;
+                    ob.g_w = ob.w;
+                    ob.g_h = ob.h;
+                    ob.o_angle = ob.angle;
+                    ob.o_x = ob.x;
+                    ob.o_y = ob.y;
+                    ob.o_w = ob.w;
+                    ob.o_h = ob.h;
+                    objects[args[1] - 0] = ob;
                 }
                 else if (command == "r"){
                     objects[args[0] - 0].radStrength = args[1] - 0;
@@ -1102,6 +1159,10 @@
                     mine.push(args[0] - 0);
                 }
                 else if (command == "t"){
+                    lastTick = window.performance.now();
+                    if (args.length == 3) {
+                        myCastle.health = args[2] - 0;
+                    }
                     totalTicksPassed++;
                     var timeElapsedSinceStart = window.performance.now() - startTime;
                     var gTimePerTick = timeElapsedSinceStart / totalTicksPassed;
@@ -1126,14 +1187,25 @@
                         wasPlayMode = true;
                     }
                     if (isRTF){
-                        connection.send("R" + ((keysDown["ArrowUp"] || keysDown["w"]) ? "1" : "0") + ((keysDown["ArrowLeft"] || keysDown["a"]) ? "1" : "0") + ((keysDown["ArrowRight"] || keysDown["d"]) ? "1" : "0") + ((keysDown["ArrowDown"] || keysDown["s"]) ? "1" : "0") + (keysDown[" "] ? "1" : "0"));
+                        sendProtocolMessage("R", [((keysDown["ArrowUp"] || keysDown["w"]) ? "1" : "0"), ((keysDown["ArrowLeft"] || keysDown["a"]) ? "1" : "0"), ((keysDown["ArrowRight"] || keysDown["d"]) ? "1" : "0"), ((keysDown["ArrowDown"] || keysDown["s"]) ? "1" : "0"), (keysDown[" "] ? "1" : "0")]);
                     }
                 }
                 else if (command == "M"){
                     var obj = objects[args[0] - 0];
-                    obj.x = args[1] - 0;
-                    obj.y = args[2] - 0;
-                    obj.angle = args[3] - 0;
+                    obj.o_x = obj.g_x;
+                    obj.o_y = obj.g_y;
+                    obj.o_angle = obj.g_angle;
+                    obj.o_w = obj.g_w;
+                    obj.o_h = obj.g_h;
+                    obj.g_x = args[1] - 0;
+                    obj.g_y = args[2] - 0;
+                    if (args.length > 3){
+                        obj.g_angle = args[3] - 0;
+                    }
+                    if (args.length > 5) {
+                        obj.g_w = args[4];
+                        obj.g_h = args[5];
+                    }
                 }
                 else if (command == "d"){
                     ctx.fillStyle = "red";
@@ -1144,6 +1216,9 @@
                         exploder.time = 5;
                     }
                     delete objects[args[0] - 0];
+                }
+                else if (command == "u") {
+                    objects[args[0]].upgrades.push(args[1]);
                 }
                 else if (command == "S"){
                     score = args[0] - 0;
@@ -1160,27 +1235,53 @@
                     jitter += args[0] - 0;
                 }
                 else {
-                    console.warn("Got unrecognizable data: " + message.data);
+                    console.warn("Got unrecognizable data: ");
+                    console.log(data);
                 }
             };
             var mode = 0;
             function start(){
                 me = document.getElementById("startingArrangment").value;
-                if (me == "p"){
+                if (me == "rtf"){
                     isRTF = true;
                 }
-                if (me == "d"){
+                if (me == "defender"){
                     wallsTurn = 4;
+                }
+                if (isRTF) {
+                    inventoryStuff = [
+                        /*{
+                            name: "SNIPER MODE",
+                            cost: 40,
+                            cbk: () => {
+                                sendProtocolMessage("C", [40]);
+                                rtfUpgrade("s");
+                            }
+                        }*/
+                        {
+                            name: "+GUN SPEED",
+                            cost: 30,
+                            cbk: () => {
+                                sendProtocolMessage("C", [40]);
+                                rtfUpgrade("b");
+                            }
+                        },
+                        {
+                            name: "SNIPER",
+                            cost: 40,
+                            cbk: () => {
+                                sendProtocolMessage("C", [0]);
+                                rtfUpgrade("s");
+                            }
+                        }
+                    ];
                 }
                 var banner = document.getElementById("banner").value.trim();
                 var passcode = document.getElementById("code").value.trim();
-                if (passcode.length == 0){
-                    passcode = "_spectator";
-                }
                 if (banner.length == 0){
-                    banner = "Player";
+                    banner = "Unnamed Player";
                 }
-                connection.send("c" + passcode + " " + banner + " " + me);
+                sendProtocolMessage("c", [passcode, banner, me]);
                 mode = 1; // waiting for a response
             }
 
@@ -1197,6 +1298,18 @@
             });
 
             function mainloop(){
+                let timeSinceLastTick = window.performance.now() - lastTick;
+                interpolator = timeSinceLastTick/timePerTick;
+                if (isStratChange) {
+                    interpolator = 1;
+                }
+                Object.values(objects).forEach(object => {
+                    object.x = object.g_x * interpolator + object.o_x * (1 - interpolator);
+                    object.y = object.g_y * interpolator + object.o_y * (1 - interpolator);
+                    object.angle = object.g_angle * interpolator + object.o_angle * (1 - interpolator);
+                    object.w = object.g_w * interpolator + object.o_w * (1 - interpolator);
+                    object.h = object.g_h * interpolator + object.o_h * (1 - interpolator);
+                });
                 if (isRTF && !isStratChange && counter != 0 && myCastle){
                     cX = myCastle.x - window.innerWidth / 2;
                     cY = myCastle.y - window.innerHeight / 2;
@@ -1206,7 +1319,6 @@
                 }
                 message.sticky = false;
                 if (playing) {
-                    var cantPlace = false;
                     if (!didSelectHome || inventoryPlace == 'F'){
                         cantPlace = !canPlaceCastle;
                     }
@@ -1287,8 +1399,19 @@
                         }
                     }
                 });
-                mousePos.gameX = mousePos.realX + cX;
-                mousePos.gameY = mousePos.realY + cY;
+                if (isRTF && !isStratChange && counter != 0) {
+                    var dX = window.innerWidth/2 - mousePos.realX;
+                    var dY = window.innerHeight/2 - mousePos.realY;
+                    var magnitude = Math.sqrt(dX * dX + dY * dY);
+                    var angle = Math.atan2(dY, dX);
+                    angle += myCastle.angle;
+                    mousePos.gameX = myCastle.x - Math.cos(angle) * magnitude;
+                    mousePos.gameY = myCastle.y - Math.sin(angle) * magnitude;
+                }
+                else {
+                    mousePos.gameX = mousePos.realX + cX;
+                    mousePos.gameY = mousePos.realY + cY;
+                }
                 if (mousePos.gameX > gameSize) {
                     mousePos.gameX = gameSize;
                 }
@@ -1352,9 +1475,10 @@
                     else {
                         art.drawObj(object);
                     }
+                    var teamy = object != myCastle && myCastle && teamLeader && teams[myCastle.banner] && teams[myCastle.banner] == teams[object.banner] && object.value == "R";
                     if (mousePos.gameX > object.x - 10 && mousePos.gameX < object.x + 10 && mousePos.gameY > object.y - 10 && mousePos.gameY < object.y + 10) {
-                        if (mine.indexOf(object.id) != -1) {
-                            if (object.isEditable){
+                        if ((mine.indexOf(object.id) != -1) || teamy) {
+                            if (object.isEditable || teamy){
                                 object.hovered = true;
                                 ctx.strokeStyle = "yellow";
                                 ctx.lineWidth = 3;
@@ -1379,7 +1503,7 @@
                             }
                         }
                     }
-                    if (object.isEditable && mine.indexOf(object.id) != -1){
+                    if (teamy || (object.isEditable && mine.indexOf(object.id) != -1)){
                         ctx.lineWidth = 2;
                         ctx.setLineDash([6, 2]);
                         ctx.strokeStyle = palette.MIDGREEN;
@@ -1418,7 +1542,7 @@
                             selected.goalPos.x = mousePos.gameX;
                             selected.goalPos.y = mousePos.gameY;
                         }
-                        connection.send("m" + selected.id + " " + selected.goalPos.x + " " + selected.goalPos.y + " " + selected.goalPos.angle);
+                        sendProtocolMessage("m", [selected.id, selected.goalPos.x, selected.goalPos.y, selected.goalPos.angle]);
                     }
                 }
                 else{
@@ -1466,6 +1590,13 @@
                 }
                 drawSidebar();
                 drawMessage();
+                if (myCastle && myCastle.health) {
+                    ctx.fillStyle = "white";
+                    ctx.globalAlpha = 1;
+                    ctx.font = "bold 40px sans-serif";
+                    ctx.textAlign = "left";
+                    ctx.fillText(myCastle.health, 40, 40);
+                }
                 if (effect == "CRT"){
                     ctx.beginPath();
                     ctx.strokeStyle = "black";
@@ -1494,23 +1625,19 @@
                             }
                             else {
                                 if (inventoryStuff[inventoryHovered].place) {
-                                    inventoryPlace = inventoryStuff[inventoryHovered].word;
+                                    inventoryPlace = inventoryHovered;
+                                    inventoryHovered = -1;
                                 }
                                 else {
-                                    connection.send("p" + inventoryStuff[inventoryHovered].word + " " + (myCastle.x + (Math.random() * 300 - 150)) + " " + (myCastle.y + (Math.random() * 300 - 150)));
+                                    sendProtocolMessage("p", [inventoryStuff[inventoryHovered].word, (myCastle.x + (Math.random() * 300 - 150)), (myCastle.y + (Math.random() * 300 - 150))]);
                                 }
                             }
                             inventoryMode = false;
                         }
-                        else if (inventoryPlace) {
-                            if (inventoryMode){
+                        else if (inventoryPlace != undefined) {
+                            if (!cantPlace) {
+                                sendProtocolMessage("p", [inventoryStuff[inventoryPlace].word, Math.round(mousePos.gameX), Math.round(mousePos.gameY)]);
                                 inventoryPlace = undefined;
-                            }
-                            else{
-                                if (canPlaceWall) {
-                                    connection.send("p" + inventoryPlace + " " + mousePos.gameX + " " + mousePos.gameY);
-                                    inventoryPlace = undefined;
-                                }
                             }
                         }
                         else if (isStratChange){
@@ -1520,10 +1647,10 @@
                                 hovered = undefined;
                             }
                             else {
-                                if (selected){
+                                if (selected) {
                                     angleAdjustMode = true;
                                 }
-                                if (hovered) {
+                                else if (hovered) {
                                     hovered.selected = true;
                                     selected = hovered;
                                 }
@@ -1532,7 +1659,7 @@
                     }
                     else {
                         if (canPlaceCastle){
-                            connection.send("pc " + mousePos.gameX + " " + mousePos.gameY); // place castle at position
+                            sendProtocolMessage("p", ["c", Math.round(mousePos.gameX), Math.round(mousePos.gameY)]); // place castle at position
                             didSelectHome = true;
                         }
                     }
