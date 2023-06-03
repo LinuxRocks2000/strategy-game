@@ -97,7 +97,6 @@ impl Server {
     }
 
     async fn place(&mut self, piece : Arc<Mutex<dyn GamePiece + Send + Sync>>, x : f32, y : f32, a : f32, mut sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
-        // Somehow this function is causing locking behavior. May I cordially ask, what the actual fuck?
         let la_thang = Arc::new(Mutex::new(GamePieceBase::new(piece, x, y, a).await));
         if self.costs && sender.is_some() {
             let cost = la_thang.lock().await.cost().await as i32;
@@ -156,15 +155,6 @@ impl Server {
         let y : f32 = (randlock.next() % self.gamesize) as f32;
         let chance = randlock.next() % 100;
         drop(randlock);
-        for object in &self.objects {
-            let lelock = object.lock().await;
-            if lelock.identify() == 'c' || lelock.identify() == 'R' {
-                if (lelock.physics.cx() - x).abs() < 400.0 && (lelock.physics.cy() - y).abs() < 400.0 {
-                    println!("Berakx");
-                    return;
-                }
-            }
-        }
         let thing : Arc<Mutex<dyn GamePiece + Send + Sync>> = {
             if chance < 50 {
                 Arc::new(Mutex::new(Chest::new()))
@@ -173,6 +163,15 @@ impl Server {
                 Arc::new(Mutex::new(Wall::new()))
             }
         };
+        for object in &self.objects { // This part is fine
+            let lelock = object.lock().await;
+            if lelock.identify() == 'c' || lelock.identify() == 'R' {
+                if (lelock.physics.cx() - x).abs() < 400.0 && (lelock.physics.cy() - y).abs() < 400.0 {
+                    println!("Berakx");
+                    return;
+                }
+            }
+        }
         self.place(thing, x, y, 0.0, None).await;
     }
 
@@ -372,7 +371,7 @@ impl Server {
         if self.mode == GameMode::Waiting {
             self.set_mode(GameMode::Strategy);
             for _ in 0..((self.gamesize * self.gamesize) / 1000000) { // One per 1,000,000 square pixels
-                self.place_random_rubble().await;
+                self.place_random_rubble().await; // THIS FUNCTION IS AT FAULT!!!!!!!!!!!!!! THE PROBLEM IS HERE!!!!!!!!!!!!! ##########################
             }
             println!("Game start.");
         }
@@ -1011,7 +1010,9 @@ async fn main(){
         let mut interval = tokio::time::interval(tokio::time::Duration::from_millis((1000.0/FPS) as u64));
         loop {
             interval.tick().await;
-            let mut lawk = server_mutex_loopah.lock().await;
+            println!("Locking");
+            let mut lawk = server_mutex_loopah.lock().await; // Tracking le deadlock: It *always*, invariably, hangs here. It never makes it inside the mainloop. Thus the problem cannot be directly related to the mainloop.
+            println!("Using");
             lawk.mainloop().await;
         }
     });
@@ -1021,7 +1022,9 @@ async fn main(){
             let command = input("");
             match command.as_str() {
                 "start" => { // Notes: starting causes the deadlock, but flipping doesn't, so the problem isn't merely locking/unlocking.
-                    server_mutex_clonahd.lock().await.start().await; // It is guaranteed to unlock successfully. What other parts of the program do is more of a quandary.
+                    let mut lock = server_mutex_clonahd.lock().await;
+                    lock.start().await; // It is NOT guaranteed to unlock successfully.
+                    drop(lock);
                 },
                 "flip" => {
                     println!("Flipping stage");
