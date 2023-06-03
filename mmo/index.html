@@ -989,7 +989,7 @@
                     ctx.fillStyle = "#484D51";
                     ctx.textAlign = "left";
                     ctx.fillText(zeroes(item.cost), x + 130 * scaleFactor, y + 68 * scaleFactor);
-                    if (didSelectHome && playing && isStratChange && score >= item.cost){
+                    if (didSelectHome && playing && (isStratChange || isRTF) && score >= item.cost){
                         if (mousePos.realX > x && mousePos.realX < (x + 203.5 * scaleFactor) && sidebarY > y && sidebarY < (y + 103 * scaleFactor)) {
                             inventoryHovered = i;
                             ctx.strokeStyle = "yellow";
@@ -1250,19 +1250,11 @@
                 }
                 if (isRTF) {
                     inventoryStuff = [
-                        /*{
-                            name: "SNIPER MODE",
-                            cost: 40,
-                            cbk: () => {
-                                sendProtocolMessage("C", [40]);
-                                rtfUpgrade("s");
-                            }
-                        }*/
                         {
                             name: "+GUN SPEED",
                             cost: 30,
                             cbk: () => {
-                                sendProtocolMessage("C", [40]);
+                                sendProtocolMessage("C", [30]);
                                 rtfUpgrade("b");
                             }
                         },
@@ -1270,7 +1262,7 @@
                             name: "SNIPER",
                             cost: 40,
                             cbk: () => {
-                                sendProtocolMessage("C", [0]);
+                                sendProtocolMessage("C", [40]);
                                 rtfUpgrade("s");
                             }
                         }

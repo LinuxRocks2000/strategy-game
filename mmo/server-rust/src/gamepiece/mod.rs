@@ -294,7 +294,7 @@ impl GamePieceBase {
         if self.shoot_timer == 0 {
             self.shoot_timer = self.shooter_properties.counter;
             for angle in &self.shooter_properties.angles {
-                server.shoot(self.physics.extend_point(50.0, *angle), self.physics.angle() + *angle, 20.0, range, None).await
+                server.shoot(self.physics.extend_point(50.0, *angle), Vector2::new_from_manda(20.0, self.physics.angle() + *angle) + self.physics.velocity, range, None).await
                 .lock().await.set_banner(self.banner); // Set the banner
             }
         }

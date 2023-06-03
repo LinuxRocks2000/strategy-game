@@ -28,7 +28,7 @@ use prng::Mulberry32;
 use crate::gamepiece::fighters::*;
 use crate::gamepiece::misc::*;
 
-const FPS : f32 = 30.0;
+const FPS : f32 = 1000.0;
 
 
 #[derive(PartialEq)]
@@ -97,6 +97,7 @@ impl Server {
     }
 
     async fn place(&mut self, piece : Arc<Mutex<dyn GamePiece + Send + Sync>>, x : f32, y : f32, a : f32, mut sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
+        // Somehow this function is causing locking behavior. May I cordially ask, what the actual fuck?
         let la_thang = Arc::new(Mutex::new(GamePieceBase::new(piece, x, y, a).await));
         if self.costs && sender.is_some() {
             let cost = la_thang.lock().await.cost().await as i32;
@@ -175,10 +176,10 @@ impl Server {
         self.place(thing, x, y, 0.0, None).await;
     }
 
-    pub async fn shoot(&mut self, position : Vector2, angle : f32, speed : f32, range : i32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
+    pub async fn shoot(&mut self, position : Vector2, velocity : Vector2, range : i32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
         let bullet = self.place(Arc::new(Mutex::new(Bullet::new())), position.x, position.y, 0.0, sender).await;
         let mut lock = bullet.lock().await;
-        lock.physics.velocity = Vector2::new_from_manda(speed, angle);
+        lock.physics.velocity = velocity;
         lock.ttl = range;
         drop(lock);
         bullet
@@ -287,8 +288,12 @@ impl Server {
             let mut winning_player : Option<Arc<Mutex<Client>>> = None;
             let mut living_teams = 0;
             let mut winning_team : Option<Arc<Mutex<TeamData>>> = None;
+            let mut is_rtf_game = true;
             for client in &self.clients {
                 let mut lockah = client.lock().await;
+                if lockah.m_castle.is_some() && lockah.m_castle.as_ref().unwrap().lock().await.identify() != 'R' {
+                    is_rtf_game = false;
+                }
                 let mut args = vec![self.counter.to_string(), (if self.mode == GameMode::Strategy { "1" } else { "0" }).to_string()];
                 if lockah.m_castle.is_some() {
                     args.push((lockah.m_castle.as_ref().unwrap().lock().await.health()).to_string());
@@ -310,6 +315,9 @@ impl Server {
                         living_teams += 1;
                     }
                 }
+            }
+            if is_rtf_game {
+                self.set_mode(GameMode::Play);
             }
             if living_teams == 0 {
                 println!("GAME ENDS WITH A TIE");
@@ -363,7 +371,7 @@ impl Server {
     async fn start(&mut self) {
         if self.mode == GameMode::Waiting {
             self.set_mode(GameMode::Strategy);
-            for _ in 0..((self.gamesize * self.gamesize) / 1000000) { // One per 500,000 square pixels
+            for _ in 0..((self.gamesize * self.gamesize) / 1000000) { // One per 1,000,000 square pixels
                 self.place_random_rubble().await;
             }
             println!("Game start.");
@@ -1003,7 +1011,8 @@ async fn main(){
         let mut interval = tokio::time::interval(tokio::time::Duration::from_millis((1000.0/FPS) as u64));
         loop {
             interval.tick().await;
-            server_mutex_loopah.lock().await.mainloop().await;
+            let mut lawk = server_mutex_loopah.lock().await;
+            lawk.mainloop().await;
         }
     });
 
@@ -1011,8 +1020,8 @@ async fn main(){
         loop {
             let command = input("");
             match command.as_str() {
-                "start" => {
-                    server_mutex_clonahd.lock().await.start().await;
+                "start" => { // Notes: starting causes the deadlock, but flipping doesn't, so the problem isn't merely locking/unlocking.
+                    server_mutex_clonahd.lock().await.start().await; // It is guaranteed to unlock successfully. What other parts of the program do is more of a quandary.
                 },
                 "flip" => {
                     println!("Flipping stage");
