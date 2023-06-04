@@ -28,7 +28,7 @@ use prng::Mulberry32;
 use crate::gamepiece::fighters::*;
 use crate::gamepiece::misc::*;
 
-const FPS : f32 = 1000.0;
+const FPS : f32 = 30.0;
 
 
 #[derive(PartialEq)]
@@ -81,7 +81,8 @@ pub struct Server {
     counter         : u32,
     costs           : bool, // Whether or not to cost money when placing a piece
     random          : Arc<Mutex<Mulberry32>>,
-    place_timer     : u32
+    place_timer     : u32,
+    autonomous      : Option<(u32, u32, u32, u32)>
 }
 
 enum AuthState {
@@ -93,7 +94,12 @@ enum AuthState {
 
 impl Server {
     fn new_user_can_join(&self) -> bool {
-        self.mode == GameMode::Waiting
+        if self.autonomous.is_some() {
+            return self.authenticateds < self.autonomous.unwrap().1;
+        }
+        else {
+            return self.mode == GameMode::Waiting;
+        }
     }
 
     async fn place(&mut self, piece : Arc<Mutex<dyn GamePiece + Send + Sync>>, x : f32, y : f32, a : f32, mut sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
@@ -274,7 +280,18 @@ impl Server {
             }
         }
         if self.mode == GameMode::Waiting {
-
+            if self.autonomous.is_some() {
+                if self.authenticateds >= self.autonomous.unwrap().0 {
+                    self.autonomous.as_mut().unwrap().2 -= 1;
+                    self.broadcast(ProtocolMessage {
+                        command: '!',
+                        args: vec![self.autonomous.unwrap().2.to_string()]
+                    }, None).await;
+                    if self.autonomous.unwrap().2 <= 0 {
+                        self.start().await;
+                    }
+                }
+            }
         }
         else {
             if self.counter > 0 {
@@ -312,6 +329,15 @@ impl Server {
                     }
                     else { // Unaffiliated players are considered as teams of their own
                         living_teams += 1;
+                    }
+                }
+                else {
+                    if lockah.m_castle.is_some() {
+                        lockah.m_castle = None;
+                        lockah.send_protocol_message(ProtocolMessage {
+                            command: 'l',
+                            args: vec![]
+                        }).await;
                     }
                 }
             }
@@ -352,7 +378,12 @@ impl Server {
 
     fn set_mode(&mut self, mode : GameMode) {
         self.counter = match mode {
-            GameMode::Waiting => 1.0,
+            GameMode::Waiting => {
+                if self.autonomous.is_some() {
+                    self.autonomous.as_mut().unwrap().2 = self.autonomous.unwrap().3;
+                }
+                1.0
+            },
             GameMode::Strategy => FPS * 40.0,
             GameMode::Play => FPS * 20.0
         } as u32;
@@ -369,10 +400,10 @@ impl Server {
 
     async fn start(&mut self) {
         if self.mode == GameMode::Waiting {
-            self.set_mode(GameMode::Strategy);
             for _ in 0..((self.gamesize * self.gamesize) / 1000000) { // One per 1,000,000 square pixels
                 self.place_random_rubble().await; // THIS FUNCTION IS AT FAULT!!!!!!!!!!!!!! THE PROBLEM IS HERE!!!!!!!!!!!!! ##########################
             }
+            self.set_mode(GameMode::Strategy);
             println!("Game start.");
         }
         else {
@@ -404,10 +435,10 @@ impl Server {
     async fn add(&mut self, pc : Arc<Mutex<GamePieceBase>>, sender : Option<&mut Client>) {
         let mut piece = pc.lock().await;
         piece.set_id(self.top_id);
+        self.top_id += 1;
         if sender.is_some() {
             piece.set_banner(sender.as_ref().unwrap().banner);
         }
-        self.top_id += 1;
         let mut sendoo = self.broadcast(piece.get_new_message().await, sender).await;
         if sendoo.is_some(){
             piece.set_banner(sendoo.as_ref().unwrap().banner);
@@ -983,8 +1014,18 @@ fn input(prompt: &str) -> String {
 }
 
 
+#[derive(Debug)]
+enum ServerCommand {
+    Start,
+    Flip,
+    Autonomous (u32, u32, u32),
+    TeamNew (Arc<String>, Arc<String>),
+}
+
+
 #[tokio::main]
 async fn main(){
+    use tokio::sync::mpsc::error::TryRecvError;
     let mut rng = rand::thread_rng();
     let server = Server {
         clients             : vec![],
@@ -1000,54 +1041,93 @@ async fn main(){
         counter             : 1,
         costs               : true,
         random              : Arc::new(Mutex::new(Mulberry32::new(rng.gen()))),
-        place_timer         : 100
+        place_timer         : 100,
+        autonomous          : None
     };
     println!("Started server with password {}, terrain seed {}", server.password, server.terrain_seed);
     let server_mutex = Arc::new(Mutex::new(server));
     let server_mutex_loopah = server_mutex.clone();
-    let server_mutex_clonahd = server_mutex.clone();
+    let (commandset, mut commandget) = tokio::sync::mpsc::channel(32); // fancy number
     tokio::task::spawn(async move {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_millis((1000.0/FPS) as u64));
         loop {
             interval.tick().await;
-            println!("Locking");
             let mut lawk = server_mutex_loopah.lock().await; // Tracking le deadlock: It *always*, invariably, hangs here. It never makes it inside the mainloop. Thus the problem cannot be directly related to the mainloop.
-            println!("Using");
             lawk.mainloop().await;
+            match commandget.try_recv() {
+                Ok (ServerCommand::Start) => {
+                    lawk.start().await;
+                },
+                Ok (ServerCommand::Flip) => {
+                    lawk.flip();
+                },
+                Ok (ServerCommand::TeamNew (name, password)) => {
+                    let banner = lawk.banner_add(None, name).await;
+                    let id = lawk.teams.len();
+                    lawk.teams.push(Arc::new(Mutex::new(TeamData {
+                        id,
+                        banner_id: banner,
+                        password,
+                        members: vec![]
+                    })));
+                },
+                Ok (ServerCommand::Autonomous (min_players, max_players, auto_timeout)) => {
+                    lawk.autonomous = Some((min_players, max_players, auto_timeout, auto_timeout));
+                },
+                Err (TryRecvError::Disconnected) => {
+                    println!("The channel handling server control was disconnected!");
+                },
+                Err (TryRecvError::Empty) => {} // Do nothing; we expect it to be empty quite often.
+            }
         }
     });
 
     tokio::task::spawn(async move {
         loop {
             let command = input("");
-            match command.as_str() {
+            let to_send = match command.as_str() {
                 "start" => { // Notes: starting causes the deadlock, but flipping doesn't, so the problem isn't merely locking/unlocking.
-                    let mut lock = server_mutex_clonahd.lock().await;
-                    lock.start().await; // It is NOT guaranteed to unlock successfully.
-                    drop(lock);
+                    ServerCommand::Start
                 },
                 "flip" => {
                     println!("Flipping stage");
-                    server_mutex_clonahd.lock().await.flip();
+                    ServerCommand::Flip
                 },
                 "team new" => {
                     let name = Arc::new(input("Team name: "));
                     let password = Arc::new(input("Team password: "));
-                    let mut lock = server_mutex_clonahd.lock().await;
-                    let banner = lock.banner_add(None, name).await;
-                    let id = lock.teams.len();
-                    lock.teams.push(Arc::new(Mutex::new(TeamData {
-                        id,
-                        banner_id: banner,
-                        password,
-                        members: vec![]
-                    })));
-                    drop(lock);
+                    ServerCommand::TeamNew(name, password)
+                },
+                "autonomous" => {
+                    let min_players = match input("Minimum player count to start: ").parse::<u32>() {
+                        Ok(num) => num,
+                        Err(_) => {
+                            println!("Invalid number.");
+                            continue;
+                        }
+                    };
+                    let max_players = match input("Maximum player count: ").parse::<u32>() {
+                        Ok(num) => num,
+                        Err(_) => {
+                            println!("Invalid number.");
+                            continue;
+                        }
+                    };
+                    let auto_timeout = match input("Timer: ").parse::<u32>() {
+                        Ok(num) => num,
+                        Err(_) => {
+                            println!("Invalid number.");
+                            continue;
+                        }
+                    };
+                    ServerCommand::Autonomous (min_players, max_players, auto_timeout)
                 },
                 _ => {
                     println!("Invalid command.");
+                    continue;
                 }
-            }
+            };
+            commandset.send(to_send).await.expect("OOOOOOPS");
         }
     });
 

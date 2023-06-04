@@ -77,7 +77,7 @@ pub trait GamePiece {
     }
 
     fn update(&mut self, _master : &mut GamePieceBase, _servah : &mut Server) {
-
+        
     }
 
     fn cost(&self) -> u32 {
@@ -286,8 +286,6 @@ impl GamePieceBase {
         while self.broadcasts.len() > 0 {
             server.broadcast(self.broadcasts.remove(0), None).await;
         }
-        self.physics.set_cx(coterminal(self.physics.cx(), server.gamesize as f32));
-        self.physics.set_cy(coterminal(self.physics.cy(), server.gamesize as f32));
     }
 
     pub async fn shawty(&mut self, range : i32, server : &mut Server) {
@@ -443,6 +441,11 @@ impl GamePiece for Castle {
             thing.shooter_properties.angles[0] = -PI/2.0;
         }
         thing
+    }
+
+    fn update(&mut self, master : &mut GamePieceBase, server : &mut Server) {
+        master.physics.set_cx(coterminal(master.physics.cx(), server.gamesize as f32));
+        master.physics.set_cy(coterminal(master.physics.cy(), server.gamesize as f32));
     }
 
     fn identify(&self) -> char {

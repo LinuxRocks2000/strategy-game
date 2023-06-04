@@ -141,6 +141,8 @@
             Get a real browser that supports canvas, please!
         </canvas>
         <canvas id="preload_terrain" style="display: none;"></canvas>
+        <script src="glfx.js"></script>
+        <script src="crt.js"></script>
         <script>
             function mulberry32(a) {
                 return function () {
@@ -243,6 +245,7 @@
         </script>
         <div id="notConnected">Not Connected!<br>Reload the page.</div>
         <script>
+            var effect = "none";
             const PI = Math.PI;
             function coterminal(angle, about = PI * 2){
                 while (angle < 0) {
@@ -266,6 +269,9 @@
 
             var canvas = document.getElementById("game");
             var ctx = canvas.getContext("2d");
+            if (effect == "CRT") {
+                var drawCRT = fakeCRT(canvas, ctx);
+            }
 
             //ctx.oldDrawImage = ctx.drawImage;
             //ctx.drawImage = function (image, x, y, w, h) {
@@ -339,7 +345,6 @@
             var canPlaceCastle = false;
             var sendNotifs = false;
             var isFirstTick = true;
-            var effect = "none";
             var CRTEffectWipe = 0;
             var nearestCastleAngle = 0;
             var totalTicksPassed = 0;
@@ -837,8 +842,14 @@
                     sidebarScroll += evt.deltaY;
                 }
                 else{
-                    xv += evt.deltaX;
-                    yv += evt.deltaY;
+                    if (keysDown["Shift"]) {
+                        xv += evt.deltaY;
+                        yv += evt.deltaX;
+                    }
+                    else {
+                        xv += evt.deltaX;
+                        yv += evt.deltaY;
+                    }
                 }
             };
 
@@ -1602,6 +1613,7 @@
                         ctx.lineTo(window.innerWidth, linePos);
                     }
                     ctx.stroke();
+                    drawCRT();
                 }
             }
 
@@ -1655,14 +1667,19 @@
                             didSelectHome = true;
                         }
                     }
-                });
-                
+                });                
                 mainloop();
             }
 
             window.onresize = () => {
+                var canvas = document.getElementById("game");
                 canvas.width = window.innerWidth;
                 canvas.height = window.innerHeight;
+                if (effect == "CRT") {
+                    canvas = document.getElementById("old_game");
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                }
             };
             
             window.onresize();
