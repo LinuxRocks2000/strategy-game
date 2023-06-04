@@ -82,7 +82,8 @@ pub struct Server {
     costs           : bool, // Whether or not to cost money when placing a piece
     random          : Arc<Mutex<Mulberry32>>,
     place_timer     : u32,
-    autonomous      : Option<(u32, u32, u32, u32)>
+    autonomous      : Option<(u32, u32, u32, u32)>,
+    is_io           : bool // IO mode gets rid of the winner system (game never ends) and allows people to join at any time.
 }
 
 enum AuthState {
@@ -94,12 +95,14 @@ enum AuthState {
 
 impl Server {
     fn new_user_can_join(&self) -> bool {
+        let mut moidah = self.mode == GameMode::Waiting;
+        if self.is_io {
+            moidah = true; // Waiting means nothing during io mode.
+        }
         if self.autonomous.is_some() {
-            return self.authenticateds < self.autonomous.unwrap().1;
+            moidah = moidah && (self.authenticateds < self.autonomous.unwrap().1);
         }
-        else {
-            return self.mode == GameMode::Waiting;
-        }
+        return moidah;
     }
 
     async fn place(&mut self, piece : Arc<Mutex<dyn GamePiece + Send + Sync>>, x : f32, y : f32, a : f32, mut sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
@@ -270,6 +273,23 @@ impl Server {
         }
     }
 
+    async fn clear_of_banner(&mut self, banner : usize) {
+        let mut i : i32 = 0;
+        while i < self.objects.len() as i32 {
+            let lockah_thang = self.objects[i as usize].clone();
+            let obj = lockah_thang.lock().await;
+            if obj.get_banner() == banner {
+                self.objects.remove(i as usize);
+                i -= 1;
+                self.broadcast(ProtocolMessage {
+                    command: 'd',
+                    args: vec![obj.get_id().to_string()]
+                }, None).await;
+            }
+            i += 1;
+        }
+    }
+
     async fn mainloop(&mut self) {
         if self.mode == GameMode::Play {
             self.deal_with_objects().await;
@@ -305,8 +325,9 @@ impl Server {
             let mut living_teams = 0;
             let mut winning_team : Option<Arc<Mutex<TeamData>>> = None;
             let mut is_rtf_game = true;
-            for client in &self.clients {
-                let mut lockah = client.lock().await;
+            for i in 0..self.clients.len() {
+                let cli = self.clients[i].clone();
+                let mut lockah = cli.lock().await;
                 if lockah.m_castle.is_some() && lockah.m_castle.as_ref().unwrap().lock().await.identify() != 'R' {
                     is_rtf_game = false;
                 }
@@ -320,7 +341,7 @@ impl Server {
                 }).await;
                 if lockah.is_alive().await {
                     living += 1;
-                    winning_player = Some(client.clone());
+                    winning_player = Some(self.clients[i].clone());
                     if lockah.team.is_some() {
                         if !winning_team.is_some() || !Arc::ptr_eq(winning_team.as_ref().unwrap(), lockah.team.as_ref().unwrap()) { // If there's no winning team, or the winning team != the current team, incremeent - you've found a new living team
                             living_teams += 1;
@@ -338,40 +359,46 @@ impl Server {
                             command: 'l',
                             args: vec![]
                         }).await;
+                        if self.is_io {
+                            let banner = lockah.banner;
+                            self.clear_of_banner(banner).await;
+                        }
                     }
                 }
             }
             if is_rtf_game {
                 self.set_mode(GameMode::Play);
             }
-            if living_teams == 0 {
-                println!("GAME ENDS WITH A TIE");
-                self.broadcast(ProtocolMessage {
-                    command: 'T',
-                    args: vec![]
-                }, None).await;
-                println!("Tie broadcast complete.");
-            }
-            else if living_teams == 1 { // This will also evaluate true if there's only one player on the field
-                println!("GAME ENDS WITH A WINNER");
-                let winning_banner = if living > 1 {
-                    winning_team.as_ref().unwrap().lock().await.banner_id
-                }
-                else {
-                    winning_player.as_ref().unwrap().lock().await.send_protocol_message(ProtocolMessage {
-                        command: 'W',
+            if !self.is_io {
+                if living_teams == 0 {
+                    println!("GAME ENDS WITH A TIE");
+                    self.broadcast(ProtocolMessage {
+                        command: 'T',
                         args: vec![]
-                    }).await;
-                    winning_player.as_ref().unwrap().lock().await.banner
-                };
-                self.broadcast(ProtocolMessage {
-                    command: 'E',
-                    args: vec![winning_banner.to_string()]
-                }, None).await;
-                println!("Win broadcast complete.");
-            }
-            if living_teams < 2 {
-                self.reset().await;
+                    }, None).await;
+                    println!("Tie broadcast complete.");
+                }
+                else if living_teams == 1 { // This will also evaluate true if there's only one player on the field
+                    println!("GAME ENDS WITH A WINNER");
+                    let winning_banner = if living > 1 {
+                        winning_team.as_ref().unwrap().lock().await.banner_id
+                    }
+                    else {
+                        winning_player.as_ref().unwrap().lock().await.send_protocol_message(ProtocolMessage {
+                            command: 'W',
+                            args: vec![]
+                        }).await;
+                        winning_player.as_ref().unwrap().lock().await.banner
+                    };
+                    self.broadcast(ProtocolMessage {
+                        command: 'E',
+                        args: vec![winning_banner.to_string()]
+                    }, None).await;
+                    println!("Win broadcast complete.");
+                }
+                if living_teams < 2 {
+                    self.reset().await;
+                }
             }
         }
     }
@@ -963,6 +990,7 @@ async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>){
         }
     }
     let morlock = moi.lock().await;
+    let mut serverlock = server.lock().await;
     morlock.close();
     if morlock.team.is_some(){ // Remove us from the team
         let mut teamlock = morlock.team.as_ref().unwrap().lock().await;
@@ -976,11 +1004,14 @@ async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>){
         }
     }
     if !morlock.do_close { // If it's not been force-closed by the server (which handles closing if force-close happens)
-        let index = server.lock().await.clients.iter().position(|x| Arc::ptr_eq(x, &moi)).unwrap();
-        server.lock().await.clients.remove(index);
+        let index = serverlock.clients.iter().position(|x| Arc::ptr_eq(x, &moi)).unwrap();
+        serverlock.clients.remove(index);
     }
     if morlock.is_authorized {
-        server.lock().await.authenticateds -= 1;
+        serverlock.authenticateds -= 1;
+    }
+    if serverlock.is_io {
+        serverlock.clear_of_banner(morlock.banner).await;
     }
     println!("Dropped client");
 }
@@ -1018,6 +1049,7 @@ fn input(prompt: &str) -> String {
 enum ServerCommand {
     Start,
     Flip,
+    IoModeToggle,
     Autonomous (u32, u32, u32),
     TeamNew (Arc<String>, Arc<String>),
 }
@@ -1042,7 +1074,8 @@ async fn main(){
         costs               : true,
         random              : Arc::new(Mutex::new(Mulberry32::new(rng.gen()))),
         place_timer         : 100,
-        autonomous          : None
+        autonomous          : None,
+        is_io               : false
     };
     println!("Started server with password {}, terrain seed {}", server.password, server.terrain_seed);
     let server_mutex = Arc::new(Mutex::new(server));
@@ -1074,6 +1107,10 @@ async fn main(){
                 Ok (ServerCommand::Autonomous (min_players, max_players, auto_timeout)) => {
                     lawk.autonomous = Some((min_players, max_players, auto_timeout, auto_timeout));
                 },
+                Ok (ServerCommand::IoModeToggle) => {
+                    lawk.is_io = !lawk.is_io;
+                    println!("Set io mode to {}", lawk.is_io);
+                },
                 Err (TryRecvError::Disconnected) => {
                     println!("The channel handling server control was disconnected!");
                 },
@@ -1097,6 +1134,9 @@ async fn main(){
                     let name = Arc::new(input("Team name: "));
                     let password = Arc::new(input("Team password: "));
                     ServerCommand::TeamNew(name, password)
+                },
+                "toggle iomode" => {
+                    ServerCommand::IoModeToggle
                 },
                 "autonomous" => {
                     let min_players = match input("Minimum player count to start: ").parse::<u32>() {

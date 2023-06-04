@@ -177,6 +177,10 @@ impl GamePieceBase {
         self.piece.lock().await.is_editable()
     }
 
+    pub fn murder(&mut self) {
+        self.health = 0.0;
+    }
+
     pub async fn target(&mut self, server : &mut Server) {
         let mut best : Option<Arc<Mutex<GamePieceBase>>> = None;
         let mut best_value : f32 = 0.0; // If best is None, this value is ignored, so it can be anything.
