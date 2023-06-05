@@ -203,6 +203,9 @@ impl Server {
     }
 
     async fn deal_with_objects(&mut self) {
+        if self.objects.len() == 0 {
+            return;
+        }
         for x in 0..(self.objects.len() - 1) { // Go from first until the next-to-last item, because the inner loop goes from second to last.
             for y in (x + 1)..self.objects.len() {
                 if x == y {
