@@ -75,8 +75,8 @@
         <button id="enableNotifs" style="display: none;">Click To Enable Notifications</button>
         <div id="mainscreen">
             <div id="menu">
-                Banner (one word only - anything after a space will be ignored; this helps other players identify who's shooting at them and who won):<input type="text" id="banner" /><br />
-                Entry code (leave blank for spectator mode): <input type="text" id="code" /><br/>
+                Banner (this helps other players identify who's shooting at them and who won): <input type="text" id="banner" /><br />
+                Entry code (leave blank for spectator mode; probably "uffit"): <input type="text" id="code" /><br/>
                 <select id="startingArrangment">
                     <option value="normal">Default - Castle, x4 fighters</option>
                     <option value="rtf">RTF - Real Time Fighter, x2 fighters</option>
@@ -1110,6 +1110,9 @@
                 else if (command == "W"){
                     alert("You won! Your final score: " + score);
                 }
+                else if (command == "p") {
+                    document.getElementById("code").style.display = "none";
+                }
                 else if (command == "E"){
                     alert("Game over! <" + banners[args[0]] + "> won.");
                 }
@@ -1166,6 +1169,7 @@
                     console.log(args);
                     if (!myCastle){ // Your castle is always the first object you receive
                         myCastle = objects[args[0] - 0];
+                        myCastle.health = 3;
                     }
                     mine.push(args[0] - 0);
                 }
@@ -1593,13 +1597,17 @@
                 }
                 drawSidebar();
                 drawMessage();
-                /*if (myCastle && myCastle.health) {
-                    ctx.fillStyle = "white";
+                if (myCastle && myCastle.health) {
+                    /*ctx.fillStyle = "white";
                     ctx.globalAlpha = 1;
                     ctx.font = "bold 40px sans-serif";
                     ctx.textAlign = "left";
-                    ctx.fillText(myCastle.health, 40, 40);
-                }*/
+                    ctx.fillText(myCastle.health, 40, 40);*/
+                    ctx.fillStyle = "blue";
+                    ctx.fillRect(window.innerWidth/2 - 100, 50, 200, 20);
+                    ctx.fillStyle = "red";
+                    ctx.fillRect(window.innerWidth/2 - 98, 52, myCastle.health / 3 * 196, 16);
+                }
                 if (effect == "CRT"){
                     ctx.beginPath();
                     ctx.strokeStyle = "black";

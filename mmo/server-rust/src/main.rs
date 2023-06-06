@@ -83,7 +83,8 @@ pub struct Server {
     random          : Arc<Mutex<Mulberry32>>,
     place_timer     : u32,
     autonomous      : Option<(u32, u32, u32, u32)>,
-    is_io           : bool // IO mode gets rid of the winner system (game never ends) and allows people to join at any time.
+    is_io           : bool, // IO mode gets rid of the winner system (game never ends) and allows people to join at any time.
+    passwordless    : bool
 }
 
 enum AuthState {
@@ -961,7 +962,15 @@ impl Client {
 async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>){
     let (tx, mut rx) = websocket.split();
     let moi = Arc::new(Mutex::new(Client::new(tx)));
-    server.lock().await.clients.push(moi.clone());
+    let mut serverlock = server.lock().await;
+    serverlock.clients.push(moi.clone());
+    if serverlock.passwordless {
+        moi.lock().await.send_protocol_message (ProtocolMessage {
+            command: 'p',
+            args: vec![]
+        });
+    }
+    drop(serverlock);
     while let Some(result) = rx.next().await {
         let serverlock = server.lock().await; // Lock the server before locking the client. This is the only way to ensure that both client and server aren't in use at the time and that the server can be safely used.
         let mut morlock = moi.lock().await;
@@ -1078,7 +1087,8 @@ async fn main(){
         random              : Arc::new(Mutex::new(Mulberry32::new(rng.gen()))),
         place_timer         : 100,
         autonomous          : None,
-        is_io               : false
+        is_io               : false,
+        passwordless        : false
     };
     println!("Started server with password {}, terrain seed {}", server.password, server.terrain_seed);
     let server_mutex = Arc::new(Mutex::new(server));

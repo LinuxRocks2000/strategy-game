@@ -450,6 +450,9 @@ impl GamePiece for Castle {
     fn update(&mut self, master : &mut GamePieceBase, server : &mut Server) {
         master.physics.set_cx(coterminal(master.physics.cx(), server.gamesize as f32));
         master.physics.set_cy(coterminal(master.physics.cy(), server.gamesize as f32));
+        if master.health < master.max_health {
+            master.health += 0.002;
+        }
     }
 
     fn identify(&self) -> char {
