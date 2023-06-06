@@ -197,6 +197,10 @@ impl GamePiece for Nuke {
         PhysicsObject::new(0.0, 0.0, 36.0, 36.0, 0.0)
     }
 
+    fn cost(&self) {
+        150
+    }
+
     fn update(&mut self, master : &mut GamePieceBase, _server : &mut Server) {
         let thrust = Vector2::new(master.goal_x - master.physics.cx(), master.goal_y - master.physics.cy()).unit() * 0.1;
         master.physics.velocity = master.physics.velocity + thrust;
