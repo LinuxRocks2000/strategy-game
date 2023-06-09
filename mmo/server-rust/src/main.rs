@@ -1,10 +1,5 @@
 /*
-    LE PROBLEM: There's a sporadic, unpredictable deadlock. We know, since it seems at random, it
-    must be related to the time difference between the mainloop and other sections.
-    Mainloop locking combinations:
-    server + objects
-    server + clients
-    There are more possibilities if we consider the client iter. We'll go over that later.
+    By Tyler Clarke
 */
 
 #![allow(non_camel_case_types)]
@@ -482,11 +477,11 @@ impl Server {
     }
 
     async fn authenticate(&self, password : String) -> AuthState {
-        if password == "" {
-            return AuthState::Spectator;
-        }
-        else if self.password == password {
+        if self.password == password || self.passwordless {
             return AuthState::Single;
+        }
+        else if password == "" {
+            return AuthState::Spectator;
         }
         else {
             for team in &self.teams {
@@ -968,7 +963,7 @@ async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>){
         moi.lock().await.send_protocol_message (ProtocolMessage {
             command: 'p',
             args: vec![]
-        });
+        }).await;
     }
     drop(serverlock);
     while let Some(result) = rx.next().await {
@@ -1062,6 +1057,7 @@ enum ServerCommand {
     Start,
     Flip,
     IoModeToggle,
+    PasswordlessToggle,
     Autonomous (u32, u32, u32),
     TeamNew (Arc<String>, Arc<String>),
 }
@@ -1124,6 +1120,14 @@ async fn main(){
                     lawk.is_io = !lawk.is_io;
                     println!("Set io mode to {}", lawk.is_io);
                 },
+                Ok (ServerCommand::PasswordlessToggle) => {
+                    lawk.passwordless = !lawk.passwordless;
+                    lawk.broadcast(ProtocolMessage {
+                        command: 'p',
+                        args: vec![]
+                    }, None).await;
+                    println!("Set passwordless mode to {}", lawk.passwordless);
+                },
                 Err (TryRecvError::Disconnected) => {
                     println!("The channel handling server control was disconnected!");
                 },
@@ -1150,6 +1154,9 @@ async fn main(){
                 },
                 "toggle iomode" => {
                     ServerCommand::IoModeToggle
+                },
+                "toggle passwordless" => {
+                    ServerCommand::PasswordlessToggle
                 },
                 "autonomous" => {
                     let min_players = match input("Minimum player count to start: ").parse::<u32>() {

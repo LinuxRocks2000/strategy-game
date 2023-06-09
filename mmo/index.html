@@ -1,5 +1,5 @@
 <!--
-    By Tyler Clarke
+    By Tyler Clarke, ThatLittleFrog, and Jakie.
     UI for MMOSG, a multiplayer strategy game (basically Rampart + Galaga)
 -->
 <!-- Oh, how I hate single file websites... Eh. This is the easiest way to handle the site. -->
@@ -17,6 +17,22 @@
                 padding: 0px;
                 overflow: hidden;
                 max-height: 100vh;
+                background-color: #1F1E23;
+                color: #ACCF74;
+                font-family: "Roboto Mono";
+            }
+            h1, h2, h3 {
+                color: #D8965A;
+                text-align: center;
+            }
+            h1 {
+                font-size: 8em;
+                font-style: italic;
+            }
+            input, select, button {
+                background-color: #327963;
+                color: #ACCF74;
+                border: none;
             }
             #mainscreen {
                 /*position: absolute;
@@ -24,14 +40,18 @@
                 left: 50%;
                 transform: translate(-50%, -50%);*/
                 text-align: center;
-                padding: 20vh;
+                padding-left: 20vh;
+                padding-right: 20vh;
                 overflow-y: scroll;
                 display: inline-block;
-                max-height: 60vh;
+                max-height: 100vh;
             }
             #start {
                 border: none;
                 padding: 20px;
+                background-color: red;
+                font-weight: bold;
+                font-size: 2em;
             }
             #game{
                 width: 100vw;
@@ -44,9 +64,11 @@
                 text-align: left;
             }
             #menu {
-                padding: 50px;
-                margin: 50px;
-                background-color: lightgrey;
+                /*padding: 50px;
+                margin: 50px;*/
+                border: 2px solid black;
+                border-radius: 10px;
+                margin: 10px;
             }
             #notConnected {
                 position: absolute;
@@ -69,19 +91,27 @@
         </style>
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@800&family=Roboto&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@800&family=Roboto&family=Roboto+Mono:wght@300&display=swap" rel="stylesheet"> 
     </head>
     <body>
         <button id="enableNotifs" style="display: none;">Click To Enable Notifications</button>
         <div id="mainscreen">
+            <h1>MMOSG</h1>
+            <i style="display: block; text-align: center;">
+                By Tyler Clarke and ThatLittleFrog<br>
+                With contributions from many sources, especially 1000D (who wrote a lot of the text here)
+            </i>
             <div id="menu">
-                Banner (this helps other players identify who's shooting at them and who won): <input type="text" id="banner" /><br />
-                Entry code (leave blank for spectator mode; probably "uffit"): <input type="text" id="code" /><br/>
-                <select id="startingArrangment">
-                    <option value="normal">Default - Castle, x4 fighters</option>
-                    <option value="rtf">RTF - Real Time Fighter, x2 fighters</option>
-                    <option value="defender">Defensive - Castle, +2 walls, x2 fighters, x2 turrets</option>
-                </select>
+                Banner (this helps other players identify who's shooting at them and who won): <input type="text" id="banner" /> <button onclick='document.getElementById("banner").value = randomBanner();'>Randomize</button>
+                <p id="code-outer">Entry code (leave blank for spectator mode; probably "uffit"): <input type="text" id="code"></input></p>
+                <p>
+                    Mode: 
+                    <select id="startingArrangment">
+                        <option value="normal">Default - Castle, x4 fighters</option>
+                        <option value="rtf">RTF - Real Time Fighter, x2 fighters</option>
+                        <option value="defender">Defensive - Castle, +2 walls, x2 fighters, x2 turrets</option>
+                    </select>
+                </p>
                 <button id="start" onclick="start();">Start</button><br><br>
                 <!--<i>Like this game? Support its development on <a href="patreon.com/user?u=91980627">Patreon</a>!</i>-->
             </div>
@@ -143,6 +173,47 @@
         <canvas id="preload_terrain" style="display: none;"></canvas>
         <script src="glfx.js"></script>
         <script src="crt.js"></script>
+        <script>
+            function randomBanner(){
+                Array.prototype.pickRandom = function() {
+                    return this[Math.floor(Math.random() * this.length)];
+                }
+                const adjs = [
+                    "Red",
+                    "Angsty",
+                    "Nerdy",
+                    "Purplish",
+                    "Stinky",
+                    "Nauseous",
+                    "Crying",
+                    "Giggling",
+                    "Coughing",
+                    "Creaking",
+                    "Bright",
+                    "Pretty",
+                    "Green",
+                    "Leafy",
+                    "Blue",
+                    "Coarse"
+                ];
+                const nouns = [
+                    "Spider Monkey",
+                    "Giraffe",
+                    "Linuxer",
+                    "Windowsill",
+                    "Cushion",
+                    "Herbivore",
+                    "Carnivore",
+                    "Rabbit",
+                    "Xylophone",
+                    "Book",
+                    "Television",
+                    "Cabinet"
+                ];
+                return adjs.pickRandom() + " " + nouns.pickRandom() + " " + Math.floor(Math.random() * 1000);
+            }
+            document.getElementById("banner").value = randomBanner();
+        </script>
         <script>
             function mulberry32(a) {
                 return function () {
@@ -310,7 +381,7 @@
                     bannerNotConnected.style.display = "none";
                 }
             }, 500);
-            const DEBUG = true;
+            const DEBUG = false;
             var playing = false;
             var cX = 0;
             var cY = 0;
@@ -795,7 +866,7 @@
                 {
                     name: "NUKE",
                     word: "n",
-                    cost: 150,
+                    cost: 300,
                     place: true
                 }
             ];
@@ -1111,7 +1182,7 @@
                     alert("You won! Your final score: " + score);
                 }
                 else if (command == "p") {
-                    document.getElementById("code").style.display = "none";
+                    document.getElementById("code-outer").style.display = "none";
                 }
                 else if (command == "E"){
                     alert("Game over! <" + banners[args[0]] + "> won.");
@@ -1284,6 +1355,9 @@
                     ];
                 }
                 var banner = document.getElementById("banner").value.trim();
+                if (banner == ""){
+                    banner = randomBanner();
+                }
                 var passcode = document.getElementById("code").value.trim();
                 if (banner.length == 0){
                     banner = "Unnamed Player";
@@ -1307,7 +1381,7 @@
             function mainloop(){
                 let timeSinceLastTick = window.performance.now() - lastTick;
                 interpolator = timeSinceLastTick/timePerTick;
-                if (isStratChange) {
+                if (interpolator > 1) {
                     interpolator = 1;
                 }
                 Object.values(objects).forEach(object => {
@@ -1316,6 +1390,13 @@
                     object.angle = object.g_angle * interpolator + object.o_angle * (1 - interpolator);
                     object.w = object.g_w * interpolator + object.o_w * (1 - interpolator);
                     object.h = object.g_h * interpolator + object.o_h * (1 - interpolator);
+                    if (interpolator == 1){
+                        object.o_w = object.g_w;
+                        object.o_h = object.g_h;
+                        object.o_angle = object.g_angle;
+                        object.o_x = object.g_x;
+                        object.o_y = object.g_y;
+                    }
                 });
                 if (isRTF && !isStratChange && counter != 0 && myCastle){
                     cX = myCastle.x - window.innerWidth / 2;
@@ -1326,7 +1407,7 @@
                 }
                 message.sticky = false;
                 if (playing) {
-                    if (!didSelectHome || inventoryPlace == 'F'){
+                    if (!didSelectHome || (inventoryPlace != undefined && inventoryStuff[inventoryPlace].word == 'F')){
                         cantPlace = !canPlaceCastle;
                     }
                     else if (isStratChange) {
@@ -1384,7 +1465,7 @@
                 ctx.fillRect(-5, -5, 10 + window.innerWidth, 10 + window.innerHeight);
                 inventoryHovered = -1;
                 if (myCastle) {
-                    canPlaceWall = (Math.abs(mousePos.gameX - myCastle.x) < 400) && (Math.abs(mousePos.gameY - myCastle.y) < 400) || inventoryPlace == "F";
+                    canPlaceWall = (Math.abs(mousePos.gameX - myCastle.x) < 400) && (Math.abs(mousePos.gameY - myCastle.y) < 400) || (inventoryPlace != undefined && inventoryStuff[inventoryPlace].word == 'F');
                     mine.forEach(index => {
                         object = objects[index];
                         if (object && object.value == "F"){

@@ -197,8 +197,8 @@ impl GamePiece for Nuke {
         PhysicsObject::new(0.0, 0.0, 36.0, 36.0, 0.0)
     }
 
-    fn cost(&self) {
-        150
+    fn cost(&self) -> u32 {
+        300
     }
 
     fn update(&mut self, master : &mut GamePieceBase, _server : &mut Server) {
