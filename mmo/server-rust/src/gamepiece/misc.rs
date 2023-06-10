@@ -21,6 +21,7 @@ pub struct Radiation {
     h        : f32
 }
 pub struct Nuke {}
+pub struct Block {}
 
 
 impl Bullet {
@@ -68,10 +69,17 @@ impl Nuke {
     }
 }
 
+impl Block {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
 
 impl GamePiece for Bullet {
     fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
         thing.ttl = 30;
+        thing.max_health = 1.0;
         thing
     }
 
@@ -209,5 +217,30 @@ impl GamePiece for Nuke {
 
     fn is_editable(&self) -> bool {
         true
+    }
+}
+
+impl GamePiece for Block {
+    fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
+        thing.physics.mass *= 100.0; // Very high density
+        thing.collision_info.damage = 0.0;
+        thing.physics.solid = true;
+        thing
+    }
+
+    fn identify(&self) -> char {
+        'B'
+    }
+
+    fn get_does_collide(&self, thing : char) -> bool {
+        thing != 'b'
+    }
+
+    fn update(&mut self, master : &mut GamePieceBase, _server : &mut Server) {
+        master.health = master.max_health; // it cannot die
+    }
+
+    fn obtain_physics(&self) -> PhysicsObject {
+        PhysicsObject::new(0.0, 0.0, 300.0, 300.0, 0.0)
     }
 }

@@ -366,6 +366,11 @@
                 this.quadraticCurveTo(0, 0, rx, 0);
                 this.translate(-x, -y);
             };
+            if (ctx.roundRect == undefined){
+                ctx.roundRect = function(x, y, width, height, radii) {
+                    ctx.makeRoundRect(x, y, width, height, radii, radii);
+                };
+            }
             var ping = false;
             var connected = true;
             var connection = connection = new WebSocket("ws" + (window.location.protocol == "https:" ? "s" : "") + "://" + location.host + location.pathname + (location.pathname.endsWith("/") ? "" : "/") + "game"); // Make it adaptive, so it fits in my reverse proxy;
@@ -393,6 +398,17 @@
             var didSelectHome = false;
             var isStratChange = false;
             var counter = 0;
+            const upgrades = {
+                menuActive: false,
+                selectedMenu: undefined, // the word the menu is writing for
+                "h": [
+                    {
+                        name: "ANTIAIRCRAFT",
+                        word: "a",
+                        cost: 10
+                    }
+                ]
+            };
             var hovered = undefined;
             var selected = undefined;
             var angleAdjustMode = false;
@@ -628,9 +644,13 @@
                 connection.send(makeProtocolMessage(command, args));
             }
 
+            function upgrade(id, upgrade) {
+                sendProtocolMessage("U", [id, upgrade]);
+            }
+
             function rtfUpgrade(upgrade) {
                 if (isRTF) {
-                    sendProtocolMessage("U", [myCastle.id, upgrade]);
+                    upgrade(myCastle.id, upgrade);
                 }
             }
 
@@ -652,6 +672,20 @@
                     i ++;
                 }
                 return ret;
+            }
+
+            function drawUpgradeMenu() {
+                if (!upgrades.menuActive) {
+                    return;
+                }
+                const cappedLine = (x, y, w, h = 4 * scaleFactor) => {
+                    var capSize = Math.min(w, h);
+                    ctx.fillStyle = "#484D51";
+                    ctx.fillRect(x, y, w, h);
+                    ctx.fillStyle = "#9B9EA5";
+                    ctx.fillRect(x, y, capSize, capSize);
+                    ctx.fillRect(x + w - capSize, y + h - capSize, capSize, capSize);
+                };
             }
 
             function drawCompass(compassRootX, compassRootY, size, range = 600){
@@ -812,7 +846,12 @@
                         ctx.arc(convertedX, convertedY, 2, 0, Math.PI * 2);
                         ctx.fill();
                     }
-                }); mousePos.realY
+                    else if (item.value == "B") {
+                        ctx.rotate(item.angle);
+                        ctx.fillStyle = "grey";
+                        ctx.fillRect(convertedX - (item.w/2 * scaleDown), convertedY - (item.h/2 * scaleDown), item.w * scaleDown, item.h * scaleDown);
+                    }
+                });
             }
 
             var inventoryStuff = [
@@ -904,6 +943,15 @@
                                 sendProtocolMessage("p", ["w", mousePos.gameX, mousePos.gameY]);
                             }
                         }
+                    }
+                }
+                else if (evt.key == "u") {
+                    if (upgrades[hovered]){
+                        upgrades.menuActive = !upgrades.menuActive;
+                        upgrades.selectedMenu = hovered;
+                    }
+                    else {
+                        upgrades.menuActive = false;
                     }
                 }
             };
@@ -1554,6 +1602,15 @@
                         ctx.fillRect(object.x + object.box.x1, object.y + object.box.y1, object.box.x2 - object.box.x1, object.box.y2 - object.box.y1);
                         ctx.globalAlpha = 1;*/
                     }
+                    else if (object.value == "B"){
+                        ctx.fillStyle = "grey";
+                        ctx.strokeStyle = "#333333";
+                        ctx.lineWidth = 5;
+                        ctx.rotate(object.angle);
+                        ctx.fillRect(object.x - object.w/2, object.y - object.h/2, object.w, object.h);
+                        ctx.strokeRect(object.x - object.w / 2, object.y - object.h / 2, object.w, object.h);
+                        ctx.rotate(-object.angle);
+                    }
                     else if (object.value == "C"){
                         ctx.fillStyle = "pink";
                         ctx.fillRect(object.x - 15, object.y - 15, 30, 10);
@@ -1678,6 +1735,7 @@
                 }
                 drawSidebar();
                 drawMessage();
+                drawUpgradeMenu();
                 if (myCastle && myCastle.health) {
                     /*ctx.fillStyle = "white";
                     ctx.globalAlpha = 1;

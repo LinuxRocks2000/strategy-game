@@ -1,4 +1,6 @@
 // Rust-ic vector library, equivalent to vector.hpp
+use std::f32::consts::PI;
+
 
 #[derive(Copy, Clone)]
 pub struct Vector2 {
@@ -105,6 +107,10 @@ impl Vector2 {
 
     pub fn unit(&self) -> Vector2 {
         Self::new_from_manda(1.0, self.angle())
+    }
+
+    pub fn cut(&self, about : Vector2) -> (Vector2, Vector2) {
+        (self.project(about), self.project(about.rot(PI/2.0)))
     }
 }
 

@@ -161,7 +161,7 @@ impl GamePieceBase {
             broadcasts : vec![],
             exploder : vec![],
             forts : vec![],
-            max_health : 1.0,
+            max_health : 2.0,
             upgrades : vec![]
         };
         piece.lock().await.construct(&mut thing);
@@ -452,6 +452,9 @@ impl GamePiece for Castle {
         master.physics.set_cy(coterminal(master.physics.cy(), server.gamesize as f32));
         if master.health < master.max_health {
             master.health += 0.002;
+        }
+        if !self.is_rtf {
+            master.physics.velocity = Vector2::empty();
         }
     }
 

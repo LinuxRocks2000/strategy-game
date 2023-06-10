@@ -94,7 +94,10 @@ impl BoxShape {
                 } else {
                     m_high
                 } * -1.0; // Note: in both cases the value you get is wrong, by a predictable factor of -1. We can reverse that very easily.
-                mtv = Vector2::new_from_manda(m_choice, axis.angle()); // Create a vector about the axis with magnitude m_choice
+                let vectah = Vector2::new_from_manda(m_choice, axis.angle()); // Create a vector about the axis with magnitude m_choice
+                if mtv.is_zero() || vectah.magnitude() < mtv.magnitude() {
+                    mtv = vectah;
+                }
                 // Note: because of the above intersection check, this will never issue a translation vector that wouldn't pull out.
             }
             return (true, mtv);
@@ -118,7 +121,8 @@ pub struct PhysicsObject {
     pub old_shape     : BoxShape,
     pub velocity      : Vector2,
     pub solid         : bool,
-    pub angle_v       : f32
+    pub angle_v       : f32,
+    pub mass          : f32
 }
 
 
@@ -131,7 +135,8 @@ impl PhysicsObject {
             old_shape : BoxShape::empty(),
             velocity : Vector2::empty(),
             solid : false, // Everything is solid by default
-            angle_v : 0.0
+            angle_v : 0.0,
+            mass : w * h // Assume a density of 1. If you want to change the *density* elsewhere, just multiply it by the new density!
         }
     }
 

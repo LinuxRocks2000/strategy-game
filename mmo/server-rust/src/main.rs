@@ -126,6 +126,13 @@ impl Server {
         self.place(Arc::new(Mutex::new(BasicFighter::new())), x, y, a, sender).await
     }
 
+    async fn place_block(&mut self, x : f32, y : f32, a : f32, w : f32, h : f32) { // No sender; blocks can't be placed by clients.
+        let thing = self.place(Arc::new(Mutex::new(Block::new())), x, y, a, None).await;
+        let mut lock = thing.lock().await;
+        lock.physics.shape.w = w;
+        lock.physics.shape.h = h;
+    }
+
     async fn place_tie_fighter(&mut self, x : f32, y : f32, a : f32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
         self.place(Arc::new(Mutex::new(TieFighter::new())), x, y, a, sender).await
     }
@@ -211,6 +218,7 @@ impl Server {
                 let mut y_lockah = self.objects[y].lock().await;
                 let intasectah = x_lockah.physics.shape().intersects(y_lockah.physics.shape());
                 if intasectah.0 {
+                    let mut is_collide = false;
                     if x_lockah.get_does_collide(y_lockah.identify()).await {
                         x_lockah.damage(y_lockah.get_collision_info().damage);
                         if x_lockah.dead() && (y_lockah.get_banner() != x_lockah.get_banner()) {
@@ -220,6 +228,7 @@ impl Server {
                                 killah.unwrap().lock().await.collect(amount).await;
                             }
                         }
+                        is_collide = true;
                     }
                     if y_lockah.get_does_collide(x_lockah.identify()).await {
                         y_lockah.damage(x_lockah.get_collision_info().damage);
@@ -229,6 +238,18 @@ impl Server {
                                 let amount = y_lockah.capture().await as i32;
                                 killah.unwrap().lock().await.collect(amount).await;
                             }
+                        }
+                        is_collide = true;
+                    }
+                    if is_collide {
+                        if x_lockah.physics.solid || y_lockah.physics.solid {
+                            let (x_perp, x_push) = x_lockah.physics.velocity.cut(intasectah.1);
+                            let (y_perp, y_push) = y_lockah.physics.velocity.cut(intasectah.1);
+                            let ratio = (x_lockah.physics.mass / y_lockah.physics.mass).min(y_lockah.physics.mass / x_lockah.physics.mass);
+                            x_lockah.physics.shape.translate(intasectah.1 * 0.5 * ratio); // I have no clue if this is correct but it works well enough
+                            y_lockah.physics.shape.translate(intasectah.1 * -0.5 * (1.0 - ratio));
+                            y_lockah.physics.velocity = x_push * (x_lockah.physics.mass / y_lockah.physics.mass) + y_perp; // add the old perpendicular component, allowing it to slide
+                            x_lockah.physics.velocity = y_push * (y_lockah.physics.mass / x_lockah.physics.mass) + x_perp; // reciprocal ratio
                         }
                     }
                 }
@@ -400,6 +421,10 @@ impl Server {
                 }
             }
         }
+    }
+
+    async fn map(&mut self){
+        self.place_block(2500.0, 2500.0, 0.0, 500.0, 500.0).await;
     }
 
     fn set_mode(&mut self, mode : GameMode) {
@@ -577,6 +602,7 @@ impl Server {
         while self.banners.len() > 0 {
             self.banners.remove(0);
         }
+        self.map().await;
     }
 }
 
@@ -762,7 +788,7 @@ impl Client {
                                                 server.place_basic_fighter(x + 200.0, y, 0.0, Some(self)).await;
                                                 server.place_basic_fighter(x, y - 200.0, 0.0, Some(self)).await;
                                                 server.place_basic_fighter(x, y + 200.0, 0.0, Some(self)).await;
-                                                self.collect(50).await;
+                                                self.collect(100).await;
                                             },
                                             ClientMode::RealTimeFighter => {
                                                 server.place_basic_fighter(x - 100.0, y, PI, Some(self)).await;
@@ -1084,10 +1110,11 @@ async fn main(){
         place_timer         : 100,
         autonomous          : None,
         is_io               : false,
-        passwordless        : false
+        passwordless        : true
     };
     println!("Started server with password {}, terrain seed {}", server.password, server.terrain_seed);
     let server_mutex = Arc::new(Mutex::new(server));
+    server_mutex.lock().await.map().await;
     let server_mutex_loopah = server_mutex.clone();
     let (commandset, mut commandget) = tokio::sync::mpsc::channel(32); // fancy number
     tokio::task::spawn(async move {
