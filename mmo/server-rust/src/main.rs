@@ -8,6 +8,7 @@ pub mod vector;
 pub mod physics;
 pub mod gamepiece;
 pub mod prng;
+pub mod config;
 use crate::vector::Vector2;
 use futures_util::{SinkExt, StreamExt, stream::SplitSink};
 use warp::Filter;
@@ -22,6 +23,7 @@ use rand::Rng;
 use prng::Mulberry32;
 use crate::gamepiece::fighters::*;
 use crate::gamepiece::misc::*;
+use crate::config::Config;
 
 const FPS : f32 = 30.0;
 
@@ -79,7 +81,8 @@ pub struct Server {
     place_timer     : u32,
     autonomous      : Option<(u32, u32, u32, u32)>,
     is_io           : bool, // IO mode gets rid of the winner system (game never ends) and allows people to join at any time.
-    passwordless    : bool
+    passwordless    : bool,
+    config          : Option<Arc<Config>>
 }
 
 enum AuthState {
@@ -131,6 +134,8 @@ impl Server {
         let mut lock = thing.lock().await;
         lock.physics.shape.w = w;
         lock.physics.shape.h = h;
+        lock.physics.set_cx(x);
+        lock.physics.set_cy(y);
     }
 
     async fn place_tie_fighter(&mut self, x : f32, y : f32, a : f32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
@@ -246,8 +251,8 @@ impl Server {
                             let (x_perp, x_push) = x_lockah.physics.velocity.cut(intasectah.1);
                             let (y_perp, y_push) = y_lockah.physics.velocity.cut(intasectah.1);
                             let ratio = (x_lockah.physics.mass / y_lockah.physics.mass).min(y_lockah.physics.mass / x_lockah.physics.mass);
-                            x_lockah.physics.shape.translate(intasectah.1 * 0.5 * ratio); // I have no clue if this is correct but it works well enough
-                            y_lockah.physics.shape.translate(intasectah.1 * -0.5 * (1.0 - ratio));
+                            x_lockah.physics.shape.translate(intasectah.1 * ratio); // I have no clue if this is correct but it works well enough
+                            y_lockah.physics.shape.translate(intasectah.1 * -1.0 * (1.0 - ratio));
                             y_lockah.physics.velocity = x_push * (x_lockah.physics.mass / y_lockah.physics.mass) + y_perp; // add the old perpendicular component, allowing it to slide
                             x_lockah.physics.velocity = y_push * (y_lockah.physics.mass / x_lockah.physics.mass) + x_perp; // reciprocal ratio
                         }
@@ -423,10 +428,6 @@ impl Server {
         }
     }
 
-    async fn map(&mut self){
-        self.place_block(2500.0, 2500.0, 0.0, 500.0, 500.0).await;
-    }
-
     fn set_mode(&mut self, mode : GameMode) {
         self.counter = match mode {
             GameMode::Waiting => {
@@ -599,10 +600,17 @@ impl Server {
             self.objects.remove(0);
         }
         self.set_mode(GameMode::Waiting);
-        while self.banners.len() > 0 {
-            self.banners.remove(0);
+        while self.banners.len() > 1 {
+            self.banners.remove(1); // Leave the first one, which is the null banner
         }
-        self.map().await;
+        self.load_config().await;
+    }
+
+    async fn load_config(&mut self) {
+        if self.config.is_some() {
+            let config = self.config.as_ref().unwrap().clone();
+            config.load_into(self).await;
+        }
     }
 }
 
@@ -1043,7 +1051,7 @@ async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>){
     if morlock.is_authorized {
         serverlock.authenticateds -= 1;
     }
-    if serverlock.is_io {
+    if serverlock.is_io || serverlock.mode == GameMode::Waiting {
         serverlock.clear_of_banner(morlock.banner).await;
     }
     println!("Dropped client");
@@ -1091,12 +1099,19 @@ enum ServerCommand {
 
 #[tokio::main]
 async fn main(){
+    let args: Vec<String> = std::env::args().collect();
     use tokio::sync::mpsc::error::TryRecvError;
     let mut rng = rand::thread_rng();
-    let server = Server {
+    let mut server = Server {
         clients             : vec![],
         mode                : GameMode::Waiting,
-        password            : input("Game password: "),
+        password            : "".to_string(),
+        config              : if args.len() > 1 {
+            Some(Arc::new(Config::new(&args[1])))
+        }
+        else {
+            None
+        },
         objects             : vec![],
         teams               : vec![],
         gamesize            : 5000,
@@ -1112,9 +1127,9 @@ async fn main(){
         is_io               : false,
         passwordless        : true
     };
+    server.load_config().await;
     println!("Started server with password {}, terrain seed {}", server.password, server.terrain_seed);
     let server_mutex = Arc::new(Mutex::new(server));
-    server_mutex.lock().await.map().await;
     let server_mutex_loopah = server_mutex.clone();
     let (commandset, mut commandget) = tokio::sync::mpsc::channel(32); // fancy number
     tokio::task::spawn(async move {

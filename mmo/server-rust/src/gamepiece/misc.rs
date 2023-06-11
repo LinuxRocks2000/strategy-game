@@ -232,10 +232,6 @@ impl GamePiece for Block {
         'B'
     }
 
-    fn get_does_collide(&self, thing : char) -> bool {
-        thing != 'b'
-    }
-
     fn update(&mut self, master : &mut GamePieceBase, _server : &mut Server) {
         master.health = master.max_health; // it cannot die
     }

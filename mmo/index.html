@@ -212,7 +212,9 @@
                 ];
                 return adjs.pickRandom() + " " + nouns.pickRandom() + " " + Math.floor(Math.random() * 1000);
             }
-            document.getElementById("banner").value = randomBanner();
+            if (document.getElementById("banner").value == "") {
+                document.getElementById("banner").value = randomBanner();
+            }
         </script>
         <script>
             function mulberry32(a) {
