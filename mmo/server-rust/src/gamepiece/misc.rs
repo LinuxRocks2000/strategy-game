@@ -103,6 +103,10 @@ impl GamePiece for Wall {
         'w'
     }
 
+    fn get_does_collide(&self, thing : char) -> bool {
+        thing != 'c' && thing != 'F' && thing != 'B' // No castles, no forts, no blocks
+    }
+
     fn obtain_physics(&self) -> PhysicsObject {
         PhysicsObject::new(0.0, 0.0, 30.0, 30.0, 0.0)
     }
@@ -120,6 +124,10 @@ impl GamePiece for Chest {
 
     fn obtain_physics(&self) -> PhysicsObject {
         PhysicsObject::new(0.0, 0.0, 30.0, 30.0, 0.0)
+    }
+
+    fn get_does_collide(&self, thing : char) -> bool {
+        thing != 'c' && thing != 'F' && thing != 'B' // No castles, no forts, no blocks
     }
 
     fn capture(&self) -> u32 {
