@@ -1106,12 +1106,7 @@ async fn main(){
         clients             : vec![],
         mode                : GameMode::Waiting,
         password            : "".to_string(),
-        config              : if args.len() > 1 {
-            Some(Arc::new(Config::new(&args[1])))
-        }
-        else {
-            None
-        },
+        config              : Some(Arc::new(Config::new(&args[1]))),
         objects             : vec![],
         teams               : vec![],
         gamesize            : 5000,
