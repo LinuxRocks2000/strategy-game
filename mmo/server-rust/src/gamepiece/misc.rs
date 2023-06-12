@@ -95,7 +95,7 @@ impl GamePiece for Bullet {
 impl GamePiece for Wall {
     fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
         thing.max_health = 2.0;
-        thing.ttl = 600;
+        thing.ttl = 1800;
         thing
     }
 
@@ -230,8 +230,8 @@ impl GamePiece for Nuke {
 
 impl GamePiece for Block {
     fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
-        thing.physics.mass *= 100.0; // Very high density
-        thing.collision_info.damage = 0.0;
+        thing.physics.mass *= 100.0; // Very high density: inexorable push
+        thing.collision_info.damage = 0.0; // Does no collision damage
         thing.physics.solid = true;
         thing
     }
