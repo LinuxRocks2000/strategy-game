@@ -233,6 +233,7 @@ impl GamePiece for Block {
         thing.physics.mass *= 100.0; // Very high density: inexorable push
         thing.collision_info.damage = 0.0; // Does no collision damage
         thing.physics.solid = true;
+        thing.max_health = 1000.0;
         thing
     }
 
