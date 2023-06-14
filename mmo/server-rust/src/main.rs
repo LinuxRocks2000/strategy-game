@@ -358,6 +358,9 @@ impl Server {
             }
         }
         if self.mode == GameMode::Waiting {
+            if self.is_io {
+                self.start().await;
+            }
             if self.autonomous.is_some() {
                 if self.living_players >= self.autonomous.unwrap().0 {
                     self.autonomous.as_mut().unwrap().2 -= 1;

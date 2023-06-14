@@ -31,7 +31,7 @@ pub struct TeamDef {
 struct ServerConfigFile {
     password        : Option<String>,
     world_size      : u32,
-    io_mode         : bool,
+    io_mode         : Option<bool>,
     prompt_password : Option<bool>,
     map             : Vec<ObjectDef>,
     autonomous      : Option<AutonomousDef>,
@@ -80,6 +80,9 @@ impl Config {
                 Some(a) => a,
                 None => 0.0
             }, def.w, def.h).await;
+        }
+        if self.json.io_mode.is_some() {
+            server.is_io = self.json.io_mode.unwrap();
         }
         match &self.json.autonomous {
             Some(auto) => {
