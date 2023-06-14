@@ -1288,10 +1288,10 @@
                 }
                 else if (command == "a"){
                     console.log(args);
-                    if (!myCastle){ // Your castle is always the first object you receive
+                    /*if (!myCastle){ // Your castle is always the first object you receive
                         myCastle = objects[args[0] - 0];
                         myCastle.health = 3;
-                    }
+                    }*/
                     mine.push(args[0] - 0);
                 }
                 else if (command == "t"){
@@ -1429,6 +1429,9 @@
             });
 
             function mainloop(){
+                if (!myCastle) {
+                    myCastle = objects[mine[0]];
+                }
                 let timeSinceLastTick = window.performance.now() - lastTick;
                 interpolator = timeSinceLastTick/timePerTick;
                 if (interpolator > 1) {

@@ -288,7 +288,7 @@ impl GamePieceBase {
             self.health = 0.0;
         }
         while self.broadcasts.len() > 0 {
-            server.broadcast(self.broadcasts.remove(0), None).await;
+            server.broadcast(self.broadcasts.remove(0)).await;
         }
     }
 

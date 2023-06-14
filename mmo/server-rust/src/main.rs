@@ -24,6 +24,11 @@ use prng::Mulberry32;
 use crate::gamepiece::fighters::*;
 use crate::gamepiece::misc::*;
 use crate::config::Config;
+use futures::{
+    future::FutureExt, // for `.fuse()`
+    select,
+};
+
 
 const FPS : f32 = 30.0;
 
@@ -44,9 +49,9 @@ pub struct Client {
     has_placed        : bool,
     banner            : usize,
     m_castle          : Option<Arc<Mutex<GamePieceBase>>>,
-    do_close          : bool,
     mode              : ClientMode,
-    team              : Option<Arc<Mutex<TeamData>>>
+    team              : Option<usize>,
+    commandah         : tokio::sync::mpsc::Sender<ServerCommand>
 }
 
 
@@ -61,15 +66,37 @@ struct TeamData {
     id               : usize,
     banner_id        : usize,
     password         : Arc<String>,
-    members          : Vec <Arc<Mutex<Client>>>
+    members          : Vec <usize>, // BANNERS
+    live_count       : u32        // how many people are actually flying under this team's banner
 }
 
+
+#[derive(Clone)]
+enum ClientCommand { // Commands sent to clients
+    Send (ProtocolMessage),
+    Tick (u32, String),
+    ScoreTo (usize, i32),
+    CloseAll
+}
+
+
+impl fmt::Debug for ClientCommand {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Client Command {}", match self {
+            ClientCommand::Send (_) => "Send",
+            ClientCommand::Tick (_, _) => "Tick",
+            ClientCommand::ScoreTo (_, _) => "ScoreTo",
+            ClientCommand::CloseAll => "CloseAll"
+        })
+    }
+}
+
+
 pub struct Server {
-    clients         : Vec<Arc<Mutex<Client>>>,
     mode            : GameMode,
     password        : String,
     objects         : Vec<Arc<Mutex<GamePieceBase>>>,
-    teams           : Vec<Arc<Mutex<TeamData>>>,
+    teams           : Vec<TeamData>,
     banners         : Vec<Arc<String>>,
     gamesize        : u32,
     authenticateds  : u32,
@@ -82,13 +109,17 @@ pub struct Server {
     autonomous      : Option<(u32, u32, u32, u32)>,
     is_io           : bool, // IO mode gets rid of the winner system (game never ends) and allows people to join at any time.
     passwordless    : bool,
-    config          : Option<Arc<Config>>
+    config          : Option<Arc<Config>>,
+    broadcast_tx    : tokio::sync::broadcast::Sender<ClientCommand>,
+    living_players  : u32,
+    winning_banner  : usize,
+    is_rtf_game     : bool
 }
 
 enum AuthState {
     Error,
     Single,
-    Team (Arc<Mutex<TeamData>>),
+    Team (usize),
     Spectator
 }
 
@@ -201,14 +232,14 @@ impl Server {
         bullet
     }
 
-    async fn get_client_by_banner(&self, banner : usize) -> Option<Arc<Mutex<Client>>> {
+    /*async fn get_client_by_banner(&self, banner : usize) -> Option<Arc<Mutex<Client>>> {
         for client in &self.clients {
             if client.lock().await.banner == banner {
                 return Some(client.clone());
             }
         }
         None
-    }
+    }*/
 
     async fn deal_with_objects(&mut self) {
         if self.objects.len() == 0 {
@@ -227,22 +258,24 @@ impl Server {
                     if x_lockah.get_does_collide(y_lockah.identify()).await {
                         x_lockah.damage(y_lockah.get_collision_info().damage);
                         if x_lockah.dead() && (y_lockah.get_banner() != x_lockah.get_banner()) {
-                            let killah = self.get_client_by_banner(y_lockah.get_banner()).await;
+                            /*let killah = self.get_client_by_banner(y_lockah.get_banner()).await;
                             if killah.is_some() {
                                 let amount = x_lockah.capture().await as i32;
                                 killah.unwrap().lock().await.collect(amount).await;
-                            }
+                            }*/
+                            self.broadcast_tx.send(ClientCommand::ScoreTo (y_lockah.get_banner(), x_lockah.capture().await as i32)).expect("Broadcast failed");
                         }
                         is_collide = true;
                     }
                     if y_lockah.get_does_collide(x_lockah.identify()).await {
                         y_lockah.damage(x_lockah.get_collision_info().damage);
                         if y_lockah.dead() && (y_lockah.get_banner() != x_lockah.get_banner()) {
-                            let killah = self.get_client_by_banner(x_lockah.get_banner()).await;
+                            /*let killah = self.get_client_by_banner(x_lockah.get_banner()).await;
                             if killah.is_some() {
                                 let amount = y_lockah.capture().await as i32;
                                 killah.unwrap().lock().await.collect(amount).await;
-                            }
+                            }*/
+                            self.broadcast_tx.send(ClientCommand::ScoreTo (x_lockah.get_banner(), y_lockah.capture().await as i32)).expect("Broadcast failed");
                         }
                         is_collide = true;
                     }
@@ -281,7 +314,7 @@ impl Server {
                 self.broadcast(ProtocolMessage {
                     command: 'M',
                     args: args_vec
-                }, None).await;
+                }).await;
             }
             obj.update(self).await;
             // Do death checks a bit late (pun not intended) so objects have a chance to self-rescue.
@@ -292,7 +325,7 @@ impl Server {
                 self.broadcast(ProtocolMessage {
                     command: 'd',
                     args: vec![obj.get_id().to_string()]
-                }, None).await;
+                }).await;
             }
             i += 1;
         }
@@ -309,7 +342,7 @@ impl Server {
                 self.broadcast(ProtocolMessage {
                     command: 'd',
                     args: vec![obj.get_id().to_string()]
-                }, None).await;
+                }).await;
             }
             i += 1;
         }
@@ -326,12 +359,12 @@ impl Server {
         }
         if self.mode == GameMode::Waiting {
             if self.autonomous.is_some() {
-                if self.authenticateds >= self.autonomous.unwrap().0 {
+                if self.living_players >= self.autonomous.unwrap().0 {
                     self.autonomous.as_mut().unwrap().2 -= 1;
                     self.broadcast(ProtocolMessage {
                         command: '!',
                         args: vec![self.autonomous.unwrap().2.to_string()]
-                    }, None).await;
+                    }).await;
                     if self.autonomous.unwrap().2 <= 0 {
                         self.start().await;
                     }
@@ -345,12 +378,13 @@ impl Server {
             else {
                 self.flip();
             }
-            let mut living = 0;
+            /*let mut living = 0;
             let mut winning_player : Option<Arc<Mutex<Client>>> = None;
             let mut living_teams = 0;
             let mut winning_team : Option<Arc<Mutex<TeamData>>> = None;
-            let mut is_rtf_game = true;
-            for i in 0..self.clients.len() {
+            let mut is_rtf_game = true;*/
+            self.broadcast_tx.send(ClientCommand::Tick (self.counter, (if self.mode == GameMode::Strategy { "1" } else { "0" }).to_string())).expect("Broadcast failed");
+            /*for i in 0..self.clients.len() {
                 let cli = self.clients[i].clone();
                 let mut lockah = cli.lock().await;
                 if lockah.m_castle.is_some() && lockah.m_castle.as_ref().unwrap().lock().await.identify() != 'R' {
@@ -390,18 +424,42 @@ impl Server {
                         }
                     }
                 }
-            }
-            if is_rtf_game {
+            }*/
+            if self.is_rtf_game {
                 self.set_mode(GameMode::Play);
             }
             if !self.is_io {
-                if living_teams == 0 {
+                if self.living_players == 0 {
                     println!("GAME ENDS WITH A TIE");
                     self.broadcast(ProtocolMessage {
                         command: 'T',
                         args: vec![]
-                    }, None).await;
+                    }).await;
                     println!("Tie broadcast complete.");
+                    self.reset().await;
+                }
+                else {
+                    for team in &self.teams {
+                        if team.live_count == self.living_players { // If one team holds all the players
+                            println!("GAME ENDS WITH A WINNER");
+                            self.broadcast(ProtocolMessage {
+                                command: 'E',
+                                args: vec![team.banner_id.to_string()]
+                            }).await;
+                            self.reset().await;
+                            return;
+                        }
+                    }
+                    if self.living_players == 1 {
+                        println!("GAME ENDS WITH A WINNER");
+                        self.broadcast(ProtocolMessage {
+                            command: 'E',
+                            args: vec![self.winning_banner.to_string()]
+                        }).await;
+                        self.reset().await;
+                    }
+                }
+                /*if living_teams == 0 {
                 }
                 else if living_teams == 1 { // This will also evaluate true if there's only one player on the field
                     println!("GAME ENDS WITH A WINNER");
@@ -423,7 +481,7 @@ impl Server {
                 }
                 if living_teams < 2 {
                     self.reset().await;
-                }
+                }*/
             }
         }
     }
@@ -463,42 +521,22 @@ impl Server {
         }
     }
 
-    async fn broadcast<'a>(&'a self, message : ProtocolMessage, mut sender : Option<&'a mut Client>) -> Option<&mut Client> {
-        let cloned_clilist = self.clients.clone();
-        for client in cloned_clilist {
-            let thisun = message.clone();
-            if sender.is_some() {
-                match client.try_lock() {
-                    Ok(mut lock) => {
-                        lock.send_protocol_message(thisun).await;
-                    },
-                    Err(_) => {
-                        sender.as_mut().unwrap().send_protocol_message(thisun).await;
-                    }
-                }
-            }
-            else {
-                client.lock().await.send_protocol_message(thisun).await;
-            }
-        }
-        sender
+    async fn broadcast<'a>(&'a self, message : ProtocolMessage) {
+        self.broadcast_tx.send(ClientCommand::Send(message)).expect("Broadcast failed");
     }
 
-    async fn add(&mut self, pc : Arc<Mutex<GamePieceBase>>, sender : Option<&mut Client>) {
+    async fn add(&mut self, pc : Arc<Mutex<GamePieceBase>>, mut sender : Option<&mut Client>) {
         let mut piece = pc.lock().await;
         piece.set_id(self.top_id);
         self.top_id += 1;
-        if sender.is_some() {
+        if sender.is_some(){
             piece.set_banner(sender.as_ref().unwrap().banner);
-        }
-        let mut sendoo = self.broadcast(piece.get_new_message().await, sender).await;
-        if sendoo.is_some(){
-            piece.set_banner(sendoo.as_ref().unwrap().banner);
-            sendoo.as_mut().unwrap().send_protocol_message(ProtocolMessage {
+            sender.as_mut().unwrap().send_protocol_message(ProtocolMessage {
                 command: 'a',
                 args: vec![piece.get_id().to_string()]
             }).await;
         }
+        self.broadcast(piece.get_new_message().await).await;
         self.objects.push(pc.clone());
     }
 
@@ -511,11 +549,9 @@ impl Server {
         }
         else {
             for team in &self.teams {
-                let lock = team.lock().await;
-                let is_allowed : bool = password == *lock.password;
-                drop(lock);
+                let is_allowed : bool = password == *team.password;
                 if is_allowed {
-                    return AuthState::Team (team.clone());
+                    return AuthState::Team (team.id);
                 }
             }
         }
@@ -525,10 +561,12 @@ impl Server {
     async fn banner_add(&mut self, mut dispatcha : Option<&mut Client>, banner : Arc<String>) -> usize {
         let bannah = self.banners.len();
         let mut args = vec![bannah.to_string(), banner.to_string()];
+        println!("Created new banner {}, {}", self.banners.len(), banner);
         if dispatcha.is_some() {
             dispatcha.as_mut().unwrap().banner = self.banners.len();
+            println!("Added the banner to a client");
             if dispatcha.as_ref().unwrap().team.is_some() {
-                args.push(dispatcha.as_ref().unwrap().team.as_ref().unwrap().lock().await.banner_id.to_string());
+                args.push(self.teams[dispatcha.as_ref().unwrap().team.unwrap()].banner_id.to_string());
             }
         }
         self.banners.push(banner.clone());
@@ -536,12 +574,12 @@ impl Server {
             command: 'b',
             args
         };
-        self.broadcast(message, dispatcha).await;
+        self.broadcast(message).await;
         bannah
     }
 
-    async fn get_team_of_banner(&self, banner : usize, mut sender : Option<&mut Client>) -> Option<Arc<Mutex<TeamData>>> {
-        for lock in &self.clients {
+    async fn get_team_of_banner(&self, banner : usize) -> Option<usize> {
+        /*for lock in &self.clients {
             match lock.try_lock() {
                 Ok(client) => {
                     if client.banner == banner && client.team.is_some() {
@@ -555,6 +593,13 @@ impl Server {
                     }
                 }
             }
+        }*/
+        for team in 0..self.teams.len() {
+            for member in &self.teams[team].members {
+                if *member == banner {
+                    return Some(team);
+                }
+            }
         }
         None
     }
@@ -566,10 +611,11 @@ impl Server {
         }).await;
         for index in 0..self.banners.len() {
             let banner = &self.banners[index];
-            let team = self.get_team_of_banner(index, Some(user)).await;
+            let team = self.get_team_of_banner(index).await;
+            println!("Team: {:?}", team);
             let mut args = vec![index.to_string(), banner.to_string()];
             if team.is_some(){
-                args.push(team.unwrap().lock().await.banner_id.to_string());
+                args.push(self.teams[team.unwrap()].banner_id.to_string());
             }
             user.send_protocol_message(ProtocolMessage {
                 command: 'b',
@@ -592,10 +638,12 @@ impl Server {
 
     async fn reset(&mut self) {
         println!("############## RESETTING ##############");
-        while self.clients.len() > 0 {
+        self.is_rtf_game = true;
+        /*while self.clients.len() > 0 {
             self.clients[0].lock().await.do_close = true;
             self.clients.remove(0);
-        }
+        }*/
+        self.broadcast_tx.send(ClientCommand::CloseAll).expect("Broadcast failed");
         while self.objects.len() > 0 {
             self.objects.remove(0);
         }
@@ -612,6 +660,18 @@ impl Server {
             config.load_into(self).await;
         }
     }
+
+    async fn new_team(&mut self, name : String, password : String) {
+        let banner = self.banner_add(None, Arc::new(name)).await;
+        let id = self.teams.len();
+        self.teams.push(TeamData {
+            id,
+            banner_id: banner,
+            password: Arc::new(password),
+            members: vec![],
+            live_count: 0
+        });
+    }
 }
 
 
@@ -623,6 +683,13 @@ pub struct ProtocolMessage {
 
 
 impl ProtocolMessage {
+    /*fn singlet(command : char) -> ProtocolMessage {
+        ProtocolMessage {
+            command,
+            args: vec![]
+        }
+    }*/
+
     fn parse_string(message : String) -> Option<Self> {
         let characters : Vec<char> = message.chars().collect();
         let command = characters[0];
@@ -680,7 +747,7 @@ impl fmt::Display for ProtocolMessage {
 
 
 impl Client {
-    fn new(tx : SplitSink<WebSocket, Message>) -> Self {
+    fn new(tx : SplitSink<WebSocket, Message>, commandah : tokio::sync::mpsc::Sender<ServerCommand>) -> Self {
         Self {
             tx,
             is_authorized: false,
@@ -688,9 +755,9 @@ impl Client {
             has_placed: false,
             banner: 0,
             m_castle: None,
-            do_close: false,
             mode: ClientMode::None,
-            team: None
+            team: None,
+            commandah
         }
     }
 
@@ -748,11 +815,12 @@ impl Client {
                         server.banner_add(Some(self), Arc::new(message.args[1].clone())).await;
                     },
                     AuthState::Team (team) => {
-                        println!("New user has authenticated as player in team {}", server.banners[team.lock().await.banner_id]);
-                        self.team = Some(team.clone());
+                        println!("New user has authenticated as player in team {}", server.banners[server.teams[team].banner_id]);
+                        self.team = Some(team);
                         self.send_singlet('s').await;
                         server.user_logged_in(self).await;
                         server.banner_add(Some(self), Arc::new(message.args[1].clone())).await;
+                        server.teams[team].members.push(self.banner);
                     },
                     AuthState::Spectator => {
                         println!("Spectator joined!");
@@ -790,6 +858,10 @@ impl Client {
                                         self.has_placed = true;
                                         server.costs = false;
                                         self.m_castle = Some(server.place_castle(x, y, self.mode == ClientMode::RealTimeFighter, Some(self)).await);
+                                        if self.mode != ClientMode::RealTimeFighter {
+                                            server.is_rtf_game = false;
+                                        }
+                                        self.commandah.send(ServerCommand::LivePlayerInc (self.team)).await.expect("Broadcast failed");
                                         match self.mode {
                                             ClientMode::Normal => {
                                                 server.place_basic_fighter(x - 200.0, y, PI, Some(self)).await;
@@ -961,7 +1033,7 @@ impl Client {
                     server.broadcast(ProtocolMessage {
                         command: 'u',
                         args: vec![id.to_string(), message.args[1].clone()]
-                    }, Some(self)).await;
+                    }).await;
                 }
                 _ => {
                     message.poison("INAPPROPRIATE COMMAND");
@@ -988,71 +1060,120 @@ impl Client {
 }
 
 
-async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>){
+async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>, broadcaster : tokio::sync::broadcast::Sender<ClientCommand>, commandset : tokio::sync::mpsc::Sender<ServerCommand>){
+    let mut receiver = broadcaster.subscribe();
     let (tx, mut rx) = websocket.split();
-    let moi = Arc::new(Mutex::new(Client::new(tx)));
-    let mut serverlock = server.lock().await;
-    serverlock.clients.push(moi.clone());
+    let mut moi = Client::new(tx, commandset);
+    let serverlock = server.lock().await; // HEY, YOU! IF YOU'RE THINKING OF MAKING THIS MUTABLE, THINK AGAIN
+    // I know making this mutable is the kind of dumb thing you would do. But just SET UP MESSAGE PASSING MORE.
     if serverlock.passwordless {
-        moi.lock().await.send_protocol_message (ProtocolMessage {
+        moi.send_protocol_message (ProtocolMessage {
             command: 'p',
             args: vec![]
         }).await;
     }
     drop(serverlock);
-    while let Some(result) = rx.next().await {
-        let serverlock = server.lock().await; // Lock the server before locking the client. This is the only way to ensure that both client and server aren't in use at the time and that the server can be safely used.
-        let mut morlock = moi.lock().await;
-        let msg = match result {
-            Ok(msg) => msg,
-            Err(e) => {
-                println!("UH NOES! A SOCKET BORKY HAPPENDY! POOPLES! {e}");
-                break;
-            }
-        };
-        if msg.is_text(){ // THE DEADLOCK IS IN HERE SOMEWHERE
-            let text = match msg.to_str() {
-                Ok(text) => text,
-                Err(()) => ""
-            };
-            if text == "_"{
-                morlock.send_text("_").await;
-            }
-            else {
-                let p = ProtocolMessage::parse_string(text.to_string());
-                if p.is_some() {
-                    morlock.handle(p.unwrap() /* If it made it this far, there's data to unwrap */, serverlock).await; // IT'S IN HERE SOMEWHERE
-                    // Deadlock condition found. An unlocked server will run mainloop *while this is called*, and because this (fails to) lock the server it can never exit. This means the client mutex is never unlocked.
+    'cliloop: loop {
+        select! {
+            insult = rx.next().fuse() => {
+                match insult {
+                    Some(result) => {
+                        let serverlock = server.lock().await; // Lock the server before locking the client. This is the only way to ensure that both client and server aren't in use at the time and that the server can be safely used.
+                        let msg = match result {
+                            Ok(msg) => msg,
+                            Err(e) => {
+                                println!("UH NOES! A SOCKET BORKY HAPPENDY! POOPLES! {e}");
+                                println!("This is not critical, your server *should* survive.");
+                                break 'cliloop;
+                            }
+                        };
+                        if msg.is_text(){ // THE DEADLOCK IS IN HERE SOMEWHERE
+                            let text = match msg.to_str() {
+                                Ok(text) => text,
+                                Err(()) => ""
+                            };
+                            if text == "_"{
+                                moi.send_text("_").await;
+                            }
+                            else {
+                                let p = ProtocolMessage::parse_string(text.to_string());
+                                if p.is_some() {
+                                    moi.handle(p.unwrap() /* If it made it this far, there's data to unwrap */, serverlock).await; // IT'S IN HERE SOMEWHERE
+                                    // Deadlock condition found. An unlocked server will run mainloop *while this is called*, and because this (fails to) lock the server it can never exit. This means the client mutex is never unlocked.
+                                }
+                            }
+                        }
+                    },
+                    None => {
+                        println!("Client gracefully disconnected");
+                        break 'cliloop;
+                    }
+                }
+            },
+            command = receiver.recv().fuse() => {
+                match command {
+                    Ok (ClientCommand::Tick (counter, modechar)) => {
+                        server.lock().await.winning_banner = moi.banner;
+                        let mut args = vec![counter.to_string(), modechar];
+                        if moi.m_castle.is_some() {
+                            args.push((moi.m_castle.as_ref().unwrap().lock().await.health()).to_string());
+                        }
+                        moi.send_protocol_message(ProtocolMessage {
+                            command: 't',
+                            args
+                        }).await;
+                        if !moi.is_alive().await {
+                            if moi.m_castle.is_some() {
+                                moi.m_castle = None;
+                                moi.send_singlet('l').await;
+                                moi.commandah.send(ServerCommand::LivePlayerDec (moi.team)).await.expect("Broadcast failed");
+                            }
+                        }
+                    },
+                    Ok (ClientCommand::Send (message)) => {
+                        moi.send_protocol_message(message).await;
+                    },
+                    Ok (ClientCommand::ScoreTo (banner, amount)) => {
+                        if moi.banner == banner {
+                            moi.score += amount;
+                            moi.send_protocol_message(ProtocolMessage {
+                                command: 'S',
+                                args: vec![moi.score.to_string()]
+                            }).await;
+                        }
+                    },
+                    Ok (ClientCommand::CloseAll) => {
+                        break 'cliloop;
+                    },
+                    _ => {}
                 }
             }
         }
-        if morlock.do_close {
-            break;
-        }
     }
-    let morlock = moi.lock().await;
     let mut serverlock = server.lock().await;
-    morlock.close();
-    if morlock.team.is_some(){ // Remove us from the team
-        let mut teamlock = morlock.team.as_ref().unwrap().lock().await;
+    if moi.is_alive().await {
+        moi.commandah.send(ServerCommand::LivePlayerDec (moi.team)).await.expect("Broadcast failed");
+    }
+    moi.close();
+    if moi.team.is_some(){ // Remove us from the team
         let mut i = 0;
-        while i < teamlock.members.len() {
-            if Arc::ptr_eq(&teamlock.members[i], &moi) {
-                teamlock.members.remove(i);
+        while i < serverlock.teams[moi.team.unwrap()].members.len() {
+            if serverlock.teams[moi.team.unwrap()].members[i] == moi.banner {
+                serverlock.teams[moi.team.unwrap()].members.remove(i);
                 break;
             }
             i += 1;
         }
     }
-    if !morlock.do_close { // If it's not been force-closed by the server (which handles closing if force-close happens)
+    /*if !morlock.do_close { // If it's not been force-closed by the server (which handles closing if force-close happens)
         let index = serverlock.clients.iter().position(|x| Arc::ptr_eq(x, &moi)).unwrap();
         serverlock.clients.remove(index);
-    }
-    if morlock.is_authorized {
+    }*/
+    if moi.is_authorized {
         serverlock.authenticateds -= 1;
     }
     if serverlock.is_io || serverlock.mode == GameMode::Waiting {
-        serverlock.clear_of_banner(morlock.banner).await;
+        serverlock.clear_of_banner(moi.banner).await;
     }
     println!("Dropped client");
 }
@@ -1093,7 +1214,9 @@ enum ServerCommand {
     IoModeToggle,
     PasswordlessToggle,
     Autonomous (u32, u32, u32),
-    TeamNew (Arc<String>, Arc<String>),
+    TeamNew (String, String),
+    LivePlayerInc (Option<usize>),
+    LivePlayerDec (Option<usize>)
 }
 
 
@@ -1102,8 +1225,8 @@ async fn main(){
     let args: Vec<String> = std::env::args().collect();
     use tokio::sync::mpsc::error::TryRecvError;
     let mut rng = rand::thread_rng();
+    let (broadcast_tx, _rx) = tokio::sync::broadcast::channel(128); // Give _rx a name because we want it to live to the end of this function
     let mut server = Server {
-        clients             : vec![],
         mode                : GameMode::Waiting,
         password            : "".to_string(),
         config              : Some(Arc::new(Config::new(&args[1]))),
@@ -1120,13 +1243,19 @@ async fn main(){
         place_timer         : 100,
         autonomous          : None,
         is_io               : false,
-        passwordless        : true
+        passwordless        : true,
+        broadcast_tx        : broadcast_tx.clone(),
+        living_players      : 0,
+        winning_banner      : 0,
+        is_rtf_game         : true
     };
+    //rx.close().await;
     server.load_config().await;
     println!("Started server with password {}, terrain seed {}", server.password, server.terrain_seed);
     let server_mutex = Arc::new(Mutex::new(server));
     let server_mutex_loopah = server_mutex.clone();
     let (commandset, mut commandget) = tokio::sync::mpsc::channel(32); // fancy number
+    let commandset_clone = commandset.clone();
     tokio::task::spawn(async move {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_millis((1000.0/FPS) as u64));
         loop {
@@ -1141,14 +1270,7 @@ async fn main(){
                     lawk.flip();
                 },
                 Ok (ServerCommand::TeamNew (name, password)) => {
-                    let banner = lawk.banner_add(None, name).await;
-                    let id = lawk.teams.len();
-                    lawk.teams.push(Arc::new(Mutex::new(TeamData {
-                        id,
-                        banner_id: banner,
-                        password,
-                        members: vec![]
-                    })));
+                    lawk.new_team(name, password).await;
                 },
                 Ok (ServerCommand::Autonomous (min_players, max_players, auto_timeout)) => {
                     lawk.autonomous = Some((min_players, max_players, auto_timeout, auto_timeout));
@@ -1162,8 +1284,22 @@ async fn main(){
                     lawk.broadcast(ProtocolMessage {
                         command: 'p',
                         args: vec![]
-                    }, None).await;
+                    }).await;
                     println!("Set passwordless mode to {}", lawk.passwordless);
+                },
+                Ok(ServerCommand::LivePlayerInc (team)) => {
+                    lawk.living_players += 1;
+                    if team.is_some() {
+                        lawk.teams[team.unwrap()].live_count += 1;
+                    }
+                    println!("New live player. Living players: {}", lawk.living_players);
+                },
+                Ok(ServerCommand::LivePlayerDec (team)) => {
+                    lawk.living_players -= 1;
+                    if team.is_some() {
+                        lawk.teams[team.unwrap()].live_count -= 1;
+                    }
+                    println!("Player died. Living players: {}", lawk.living_players);
                 },
                 Err (TryRecvError::Disconnected) => {
                     println!("The channel handling server control was disconnected!");
@@ -1185,8 +1321,8 @@ async fn main(){
                     ServerCommand::Flip
                 },
                 "team new" => {
-                    let name = Arc::new(input("Team name: "));
-                    let password = Arc::new(input("Team password: "));
+                    let name = input("Team name: ");
+                    let password = input("Team password: ");
                     ServerCommand::TeamNew(name, password)
                 },
                 "toggle iomode" => {
@@ -1232,8 +1368,10 @@ async fn main(){
     let websocket = warp::path("game")
         .and(warp::ws())
         .and(servah)
-        .map(|ws : warp::ws::Ws, servah| {
-            ws.on_upgrade(move |websocket| got_client(websocket, servah))
+        .and(warp::any().map(move || broadcast_tx.clone()))
+        .and(warp::any().map(move || commandset_clone.clone())) // dumbest line in the history of rust
+        .map(|ws : warp::ws::Ws, servah, sendah, commandset| {
+            ws.on_upgrade(move |websocket| got_client(websocket, servah, sendah, commandset))
         });
     let stat = warp::any()
         .and(warp::fs::dir("../"));

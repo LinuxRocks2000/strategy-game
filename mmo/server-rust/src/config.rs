@@ -21,13 +21,21 @@ pub struct AutonomousDef {
 
 
 #[derive(Serialize, Deserialize)]
+pub struct TeamDef {
+    name: String,
+    password: String
+}
+
+
+#[derive(Serialize, Deserialize)]
 struct ServerConfigFile {
     password        : Option<String>,
     world_size      : u32,
     io_mode         : bool,
     prompt_password : Option<bool>,
     map             : Vec<ObjectDef>,
-    autonomous      : Option<AutonomousDef>
+    autonomous      : Option<AutonomousDef>,
+    teams           : Option<Vec<TeamDef>>
 }
 
 pub struct Config {
@@ -48,10 +56,24 @@ impl Config {
     pub async fn load_into(&self, server : &mut Server) {
         server.gamesize = self.json.world_size;
         if self.json.password.is_some() {
+            server.passwordless = false;
             server.password = self.json.password.as_ref().unwrap().clone();
         }
+        else {
+            server.passwordless = true;
+        }
         if self.json.prompt_password.is_some() && self.json.prompt_password.unwrap() {
+            server.passwordless = false;
             server.password = input("Game password: ");
+        }
+        else {
+            server.passwordless = true;
+        }
+        if self.json.teams.is_some() {
+            server.passwordless = false;
+            for team in self.json.teams.as_ref().unwrap() {
+                server.new_team(team.name.clone(), team.password.clone()).await;
+            }
         }
         for def in &self.json.map {
             server.place_block(def.x, def.y, match def.a {
