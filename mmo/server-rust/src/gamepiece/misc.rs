@@ -115,6 +115,7 @@ impl GamePiece for Wall {
 impl GamePiece for Chest {
     fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
         thing.max_health = 2.0;
+        thing.ttl = 4800;
         thing
     }
 
