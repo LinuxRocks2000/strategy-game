@@ -1545,7 +1545,9 @@
                     var dY = window.innerHeight/2 - mousePos.realY;
                     var magnitude = Math.sqrt(dX * dX + dY * dY);
                     var angle = Math.atan2(dY, dX);
-                    angle += myCastle.angle;
+                    if (myCastle){
+                        angle += myCastle.angle;
+                    }
                     mousePos.gameX = myCastle.x - Math.cos(angle) * magnitude;
                     mousePos.gameY = myCastle.y - Math.sin(angle) * magnitude;
                 }
