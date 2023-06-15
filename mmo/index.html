@@ -899,7 +899,8 @@
                     cbk: () => {
                         if (score >= 30){
                             wallsTurn += 2;
-                            makeProtocolMessage("C", ["30"]);
+                            wallsRemaining += 2;
+                            sendProtocolMessage("C", ["30"]);
                         }
                     },
                     cost: 30
@@ -1328,19 +1329,21 @@
                 }
                 else if (command == "M"){
                     var obj = objects[args[0] - 0];
-                    obj.o_x = obj.g_x;
-                    obj.o_y = obj.g_y;
-                    obj.o_angle = obj.g_angle;
-                    obj.o_w = obj.g_w;
-                    obj.o_h = obj.g_h;
-                    obj.g_x = args[1] - 0;
-                    obj.g_y = args[2] - 0;
-                    if (args.length > 3){
-                        obj.g_angle = args[3] - 0;
-                    }
-                    if (args.length > 5) {
-                        obj.g_w = args[4];
-                        obj.g_h = args[5];
+                    if (obj) {
+                        obj.o_x = obj.g_x;
+                        obj.o_y = obj.g_y;
+                        obj.o_angle = obj.g_angle;
+                        obj.o_w = obj.g_w;
+                        obj.o_h = obj.g_h;
+                        obj.g_x = args[1] - 0;
+                        obj.g_y = args[2] - 0;
+                        if (args.length > 3){
+                            obj.g_angle = args[3] - 0;
+                        }
+                        if (args.length > 5) {
+                            obj.g_w = args[4];
+                            obj.g_h = args[5];
+                        }
                     }
                 }
                 else if (command == "d"){

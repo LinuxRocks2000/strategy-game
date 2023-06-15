@@ -231,10 +231,11 @@ impl GamePiece for Nuke {
 
 impl GamePiece for Block {
     fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
-        thing.physics.mass *= 100.0; // Very high density: inexorable push
+        thing.physics.mass *= 1.0;//100.0; // Very high density: inexorable push
         thing.collision_info.damage = 0.0; // Does no collision damage
         thing.physics.solid = true;
         thing.max_health = 1000.0;
+        thing.physics.fixed = true;
         thing
     }
 

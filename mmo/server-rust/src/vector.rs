@@ -112,6 +112,27 @@ impl Vector2 {
     pub fn cut(&self, about : Vector2) -> (Vector2, Vector2) {
         (self.project(about), self.project(about.rot(PI/2.0)))
     }
+
+    pub fn is_basically(&self, mag : f32) -> bool {
+        (self.magnitude() - mag).abs() < 0.001
+    }
+}
+
+impl std::fmt::Debug for Vector2 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Vector2")
+        .field("x", &self.x)
+        .field("y", &self.y)
+        .field("magnitude", &self.magnitude())
+        .field("angle", &self.angle())
+        .finish()
+    }
+}
+
+impl PartialEq for Vector2 {
+    fn eq(&self, other: &Self) -> bool {
+        self.x == other.x && self.y == other.y
+    }
 }
 
 impl std::ops::Add <Vector2> for Vector2 {

@@ -281,13 +281,13 @@ impl Server {
                     }
                     if is_collide {
                         if x_lockah.physics.solid || y_lockah.physics.solid {
-                            let (x_perp, x_push) = x_lockah.physics.velocity.cut(intasectah.1);
-                            let (y_perp, y_push) = y_lockah.physics.velocity.cut(intasectah.1);
-                            let ratio = (x_lockah.physics.mass / y_lockah.physics.mass).min(y_lockah.physics.mass / x_lockah.physics.mass);
+                            let (x_para, x_perp) = x_lockah.physics.velocity.cut(intasectah.1);
+                            let (y_para, y_perp) = y_lockah.physics.velocity.cut(intasectah.1);
+                            let ratio = (x_lockah.physics.velocity.magnitude() / y_lockah.physics.velocity.magnitude()).min(y_lockah.physics.mass / x_lockah.physics.mass);
                             x_lockah.physics.shape.translate(intasectah.1 * ratio); // I have no clue if this is correct but it works well enough
                             y_lockah.physics.shape.translate(intasectah.1 * -1.0 * (1.0 - ratio));
-                            y_lockah.physics.velocity = x_push * (x_lockah.physics.mass / y_lockah.physics.mass) + y_perp; // add the old perpendicular component, allowing it to slide
-                            x_lockah.physics.velocity = y_push * (y_lockah.physics.mass / x_lockah.physics.mass) + x_perp; // reciprocal ratio
+                            y_lockah.physics.velocity = x_perp * (x_lockah.physics.mass / y_lockah.physics.mass) + y_para; // add the old perpendicular component, allowing it to slide
+                            x_lockah.physics.velocity = y_perp * (y_lockah.physics.mass / x_lockah.physics.mass) + x_para; // reciprocal ratio
                         }
                     }
                 }
@@ -946,6 +946,7 @@ impl Client {
                         }
                     };
                     amount = amount.abs();
+                    println!("Costing an amount of money equal to {amount} coins");
                     self.collect(-amount).await;
                 },
                 'm' => {
@@ -1385,4 +1386,45 @@ async fn main(){
     let routes = stat.or(websocket);
 
     warp::serve(routes).run(([0, 0, 0, 0], 3000)).await;
+}
+
+
+#[cfg(test)]
+pub mod tests {
+    use crate::Vector2;
+    #[test]
+    fn check_vector_creation() {
+        let vec = Vector2::new_from_manda(1.0, 0.0);
+        assert_eq!(vec.x, 1.0);
+        assert_eq!(vec.y, 0.0);
+        let vec = Vector2::new(1.0, 0.0);
+        assert_eq!(vec.x, 1.0);
+        assert_eq!(vec.y, 0.0);
+        let vec = Vector2::empty();
+        assert!(vec.is_zero());
+    }
+
+    #[test]
+    fn check_vector_addition() {
+        let vec1 = Vector2::new(1.0, 0.0);
+        let vec2 = Vector2::new(-1.0, 0.0);
+        assert_eq!(vec1 + vec2, Vector2::empty());
+        let vec3 = Vector2::new(1.0, 1.0);
+        assert_eq!(vec1 + vec3, Vector2::new(2.0, 1.0));
+    }
+
+    #[test]
+    fn check_vector_cutting() {
+        let axis = Vector2::new(1.0, 1.0);
+        let vector = Vector2::new(-1.0, 1.0);
+        let (para, perp) = vector.cut(axis);
+        assert!(para.is_basically(0.0));
+        assert!(perp.is_basically(2.0_f32.sqrt()));
+        let axis2 = Vector2::new(0.0, 1.0);
+        let vector = Vector2::new(-1.0, -1.0);
+        let (para, perp) = vector.cut(axis2);
+        println!("Yep {}", para.magnitude());
+        assert!(para.is_basically(1.0));
+        assert!(perp.is_basically(1.0));
+    }
 }
