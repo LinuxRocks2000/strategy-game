@@ -332,6 +332,9 @@ impl Server {
     }
 
     async fn clear_of_banner(&mut self, banner : usize) {
+        if banner == 0 {
+            return; // Never clear banner 0. That's just dumb. If you want to clear banner 0 manually delete the entire list.
+        }
         let mut i : i32 = 0;
         while i < self.objects.len() as i32 {
             let lockah_thang = self.objects[i as usize].clone();
