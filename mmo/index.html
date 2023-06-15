@@ -1540,7 +1540,7 @@
                         }
                     }
                 });
-                if (isRTF && !isStratChange && counter != 0 && myCastle) {
+                if (isRTF && !isStratChange && counter != 0 && myCastle != undefined) {
                     var dX = window.innerWidth/2 - mousePos.realX;
                     var dY = window.innerHeight/2 - mousePos.realY;
                     var magnitude = Math.sqrt(dX * dX + dY * dY);
@@ -1567,7 +1567,7 @@
                     mousePos.gameY = 0;
                 }
 ////////////////////////////////////////////////////////////
-                if (isRTF && !isStratChange && counter != 0) {
+                if (isRTF && !isStratChange && counter != 0 && myCastle) {
                     ctx.translate(window.innerWidth/2, window.innerHeight/2);
                     ctx.rotate(-myCastle.angle);
                     ctx.translate(-window.innerWidth / 2, -window.innerHeight / 2);
@@ -1704,7 +1704,7 @@
 /////////////////////////////////////////////////////////
                 ctx.translate(cX, cY);
                 ctx.translate(-jitterX, -jitterY);
-                if (isRTF && !isStratChange && counter != 0) {
+                if (isRTF && !isStratChange && counter != 0 && myCastle != undefined) {
                     ctx.translate(window.innerWidth / 2, window.innerHeight / 2);
                     ctx.rotate(myCastle.angle);
                     ctx.translate(-window.innerWidth / 2, -window.innerHeight / 2);
