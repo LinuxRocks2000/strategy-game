@@ -650,9 +650,9 @@
                 sendProtocolMessage("U", [id, upgrade]);
             }
 
-            function rtfUpgrade(upgrade) {
+            function rtfUpgrade(thing) {
                 if (isRTF) {
-                    upgrade(myCastle.id, upgrade);
+                    upgrade(myCastle.id, thing);
                 }
             }
 
@@ -1403,6 +1403,14 @@
                             cbk: () => {
                                 sendProtocolMessage("C", [40]);
                                 rtfUpgrade("s");
+                            }
+                        },
+                        {
+                            name: "SPEEDSHIP",
+                            cost: 70,
+                            cbk: () => {
+                                sendProtocolMessage("C", [70]);
+                                rtfUpgrade("f");
                             }
                         }
                     ];

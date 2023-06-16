@@ -118,7 +118,8 @@ pub struct GamePieceBase {
     broadcasts             : Vec<ProtocolMessage>,
     exploder               : Vec<ExplosionMode>,
     forts                  : Vec<Arc<Mutex<GamePieceBase>>>,
-    upgrades               : Vec<Arc<String>>
+    upgrades               : Vec<Arc<String>>,
+    speed_cap              : f32
 }
 
 use tokio::sync::Mutex;
@@ -162,7 +163,8 @@ impl GamePieceBase {
             exploder : vec![],
             forts : vec![],
             max_health : 2.0,
-            upgrades : vec![]
+            upgrades : vec![],
+            speed_cap : 0.0
         };
         piece.lock().await.construct(&mut thing);
         thing.health = thing.max_health;
@@ -289,6 +291,11 @@ impl GamePieceBase {
         }
         while self.broadcasts.len() > 0 {
             server.broadcast(self.broadcasts.remove(0)).await;
+        }
+        if self.speed_cap != 0.0 {
+            if self.physics.velocity.magnitude() > self.speed_cap {
+                self.physics.velocity.set_magnitude(self.speed_cap);
+            }
         }
     }
 
@@ -443,6 +450,7 @@ impl GamePiece for Castle {
             thing.shooter_properties.counter = 15;
             thing.shooter_properties.shoot = true;
             thing.shooter_properties.angles[0] = -PI/2.0;
+            thing.speed_cap = 20.0;
         }
         thing
     }
@@ -476,9 +484,13 @@ impl GamePiece for Castle {
     }
 
     fn on_upgrade(&mut self, master : &mut GamePieceBase, upgrade : Arc<String>) {
+        println!("{}", upgrade);
         match upgrade.as_str() {
             "b" => { // shot counter speed
                 master.shooter_properties.counter = 10;
+            },
+            "f" => { // fast
+                master.speed_cap = 40.0;
             },
             &_ => {
                 

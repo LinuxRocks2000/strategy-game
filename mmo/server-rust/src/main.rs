@@ -283,7 +283,13 @@ impl Server {
                         if x_lockah.physics.solid || y_lockah.physics.solid {
                             let (x_para, x_perp) = x_lockah.physics.velocity.cut(intasectah.1);
                             let (y_para, y_perp) = y_lockah.physics.velocity.cut(intasectah.1);
-                            let ratio = (x_lockah.physics.velocity.magnitude() / y_lockah.physics.velocity.magnitude()).min(y_lockah.physics.mass / x_lockah.physics.mass);
+                            let sum = y_lockah.physics.velocity.magnitude() + x_lockah.physics.velocity.magnitude();
+                            let ratio = if sum == 0.0 {
+                                y_lockah.physics.mass / (x_lockah.physics.mass + y_lockah.physics.mass)
+                            }
+                            else {
+                                x_lockah.physics.velocity.magnitude() / sum
+                            };
                             x_lockah.physics.shape.translate(intasectah.1 * ratio); // I have no clue if this is correct but it works well enough
                             y_lockah.physics.shape.translate(intasectah.1 * -1.0 * (1.0 - ratio));
                             y_lockah.physics.velocity = x_perp * (x_lockah.physics.mass / y_lockah.physics.mass) + y_para; // add the old perpendicular component, allowing it to slide
@@ -1012,9 +1018,6 @@ impl Client {
                         castle.physics.velocity *= resistance;
                         castle.physics.angle_v += angle_thrust;
                         castle.physics.angle_v *= 0.9;
-                        if castle.physics.velocity.magnitude() > 20.0 {
-                            castle.physics.velocity.set_magnitude(20.0);
-                        }
                     }
                 },
                 'U' => {
@@ -1029,6 +1032,7 @@ impl Client {
                             return;
                         }
                     };
+                    println!("Upgrading id {} to {}", id, message.args[1]);
                     let upg = message.args[1].clone();
                     for object in &server.objects {
                         let mut lawk = object.lock().await;
