@@ -1,7 +1,7 @@
 { 
     "password": null,
     "world_size": 5000,
-    "io_mode": false,
+    "io_mode": true,
     "map": [
         {
             "x": 2500,

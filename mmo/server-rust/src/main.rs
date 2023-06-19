@@ -33,7 +33,7 @@ use futures::{
 const FPS : f32 = 30.0;
 
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Copy, Clone, Debug)]
 enum ClientMode {
     None,
     Normal,
@@ -113,7 +113,7 @@ pub struct Server {
     broadcast_tx    : tokio::sync::broadcast::Sender<ClientCommand>,
     living_players  : u32,
     winning_banner  : usize,
-    is_rtf_game     : bool,
+    isnt_rtf        : u32,
     times           : (f32, f32)
 }
 
@@ -399,7 +399,7 @@ impl Server {
                 self.flip();
             }
             self.broadcast_tx.send(ClientCommand::Tick (self.counter, (if self.mode == GameMode::Strategy { "1" } else { "0" }).to_string())).expect("Broadcast failed");
-            if self.is_rtf_game {
+            if self.isnt_rtf == 0 {
                 self.set_mode(GameMode::Play);
             }
             if !self.is_io {
@@ -574,7 +574,6 @@ impl Server {
 
     async fn reset(&mut self) {
         println!("############## RESETTING ##############");
-        self.is_rtf_game = true;
         /*while self.clients.len() > 0 {
             self.clients[0].lock().await.do_close = true;
             self.clients.remove(0);
@@ -794,10 +793,7 @@ impl Client {
                                         self.has_placed = true;
                                         server.costs = false;
                                         self.m_castle = Some(server.place_castle(x, y, self.mode == ClientMode::RealTimeFighter, Some(self)).await);
-                                        if self.mode != ClientMode::RealTimeFighter {
-                                            server.is_rtf_game = false;
-                                        }
-                                        self.commandah.send(ServerCommand::LivePlayerInc (self.team)).await.expect("Broadcast failed");
+                                        self.commandah.send(ServerCommand::LivePlayerInc (self.team, self.mode)).await.expect("Broadcast failed");
                                         match self.mode {
                                             ClientMode::Normal => {
                                                 server.place_basic_fighter(x - 200.0, y, PI, Some(self)).await;
@@ -1061,7 +1057,7 @@ async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>, broadcas
                             if moi.m_castle.is_some() {
                                 moi.m_castle = None;
                                 moi.send_singlet('l').await;
-                                moi.commandah.send(ServerCommand::LivePlayerDec (moi.team)).await.expect("Broadcast failed");
+                                moi.commandah.send(ServerCommand::LivePlayerDec (moi.team, moi.mode)).await.expect("Broadcast failed");
                             }
                         }
                     },
@@ -1087,7 +1083,7 @@ async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>, broadcas
     }
     let mut serverlock = server.lock().await;
     if moi.is_alive().await {
-        moi.commandah.send(ServerCommand::LivePlayerDec (moi.team)).await.expect("Broadcast failed");
+        moi.commandah.send(ServerCommand::LivePlayerDec (moi.team, moi.mode)).await.expect("Broadcast failed");
     }
     moi.close();
     if moi.team.is_some(){ // Remove us from the team
@@ -1150,8 +1146,8 @@ enum ServerCommand {
     PasswordlessToggle,
     Autonomous (u32, u32, u32),
     TeamNew (String, String),
-    LivePlayerInc (Option<usize>),
-    LivePlayerDec (Option<usize>)
+    LivePlayerInc (Option<usize>, ClientMode),
+    LivePlayerDec (Option<usize>, ClientMode)
 }
 
 
@@ -1182,7 +1178,7 @@ async fn main(){
         broadcast_tx        : broadcast_tx.clone(),
         living_players      : 0,
         winning_banner      : 0,
-        is_rtf_game         : true,
+        isnt_rtf            : 0,
         times               : (40.0, 20.0)
     };
     //rx.close().await;
@@ -1223,14 +1219,21 @@ async fn main(){
                     }).await;
                     println!("Set passwordless mode to {}", lawk.passwordless);
                 },
-                Ok(ServerCommand::LivePlayerInc (team)) => {
+                Ok(ServerCommand::LivePlayerInc (team, mode)) => {
+                    if mode != ClientMode::RealTimeFighter {
+                        println!("{:?} isn't an rtf", mode);
+                        lawk.isnt_rtf += 1;
+                    }
                     lawk.living_players += 1;
                     if team.is_some() {
                         lawk.teams[team.unwrap()].live_count += 1;
                     }
                     println!("New live player. Living players: {}", lawk.living_players);
                 },
-                Ok(ServerCommand::LivePlayerDec (team)) => {
+                Ok(ServerCommand::LivePlayerDec (team, mode)) => {
+                    if mode != ClientMode::RealTimeFighter {
+                        lawk.isnt_rtf -= 1;
+                    }
                     lawk.living_players -= 1;
                     if team.is_some() {
                         lawk.teams[team.unwrap()].live_count -= 1;
