@@ -35,7 +35,9 @@ struct ServerConfigFile {
     prompt_password : Option<bool>,
     map             : Vec<ObjectDef>,
     autonomous      : Option<AutonomousDef>,
-    teams           : Option<Vec<TeamDef>>
+    teams           : Option<Vec<TeamDef>>,
+    strat_secs      : Option<f32>,
+    play_secs       : Option<f32>
 }
 
 pub struct Config {
@@ -89,6 +91,18 @@ impl Config {
                 server.autonomous = Some((auto.min_players, auto.max_players, auto.timeout, auto.timeout));
             },
             None => {}
+        }
+        match self.json.strat_secs {
+            Some(time) => {
+                server.times.0 = time;
+            }
+            _ => {}
+        }
+        match self.json.play_secs {
+            Some(time) => {
+                server.times.1 = time;
+            }
+            _ => {}
         }
     }
 }

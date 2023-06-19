@@ -84,7 +84,7 @@ impl BoxShape {
             for (_, axis) in axes.iter().enumerate() {
                 let me_range = self.get_dotrange(*axis);
                 let them_range = other.get_dotrange(*axis);
-                if (me_range[0] > them_range[1]) || (me_range[1] < them_range[0]) { // If on any axis it doesn't intersect, there's no collision at all
+                if (me_range[0] >= them_range[1]) || (me_range[1] <= them_range[0]) { // If on any axis it doesn't intersect, there's no collision at all
                     return (false, Vector2::empty()); // Short circuit
                 }
                 let m_low = me_range[0] - them_range[1];

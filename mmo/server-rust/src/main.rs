@@ -113,7 +113,8 @@ pub struct Server {
     broadcast_tx    : tokio::sync::broadcast::Sender<ClientCommand>,
     living_players  : u32,
     winning_banner  : usize,
-    is_rtf_game     : bool
+    is_rtf_game     : bool,
+    times           : (f32, f32)
 }
 
 enum AuthState {
@@ -281,19 +282,26 @@ impl Server {
                     }
                     if is_collide {
                         if x_lockah.physics.solid || y_lockah.physics.solid {
-                            let (x_para, x_perp) = x_lockah.physics.velocity.cut(intasectah.1);
-                            let (y_para, y_perp) = y_lockah.physics.velocity.cut(intasectah.1);
                             let sum = y_lockah.physics.velocity.magnitude() + x_lockah.physics.velocity.magnitude();
                             let ratio = if sum == 0.0 {
-                                y_lockah.physics.mass / (x_lockah.physics.mass + y_lockah.physics.mass)
+                                //y_lockah.physics.mass / (x_lockah.physics.mass + y_lockah.physics.mass)
+                                if y_lockah.physics.mass < x_lockah.physics.mass {
+                                    0.0
+                                } else {
+                                    1.0
+                                }
                             }
                             else {
                                 x_lockah.physics.velocity.magnitude() / sum
                             };
                             x_lockah.physics.shape.translate(intasectah.1 * ratio); // I have no clue if this is correct but it works well enough
                             y_lockah.physics.shape.translate(intasectah.1 * -1.0 * (1.0 - ratio));
-                            y_lockah.physics.velocity = x_perp * (x_lockah.physics.mass / y_lockah.physics.mass) + y_para; // add the old perpendicular component, allowing it to slide
-                            x_lockah.physics.velocity = y_perp * (y_lockah.physics.mass / x_lockah.physics.mass) + x_para; // reciprocal ratio
+                            /*if sum != 0.0 {
+                                let (x_para, x_perp) = x_lockah.physics.velocity.cut(intasectah.1);
+                                let (y_para, y_perp) = y_lockah.physics.velocity.cut(intasectah.1);
+                                y_lockah.physics.velocity = x_perp * (x_lockah.physics.mass / y_lockah.physics.mass) + y_para; // add the old perpendicular component, allowing it to slide
+                                x_lockah.physics.velocity = y_perp * (y_lockah.physics.mass / x_lockah.physics.mass) + x_para; // reciprocal ratio
+                            }*/
                         }
                     }
                 }
@@ -390,53 +398,7 @@ impl Server {
             else {
                 self.flip();
             }
-            /*let mut living = 0;
-            let mut winning_player : Option<Arc<Mutex<Client>>> = None;
-            let mut living_teams = 0;
-            let mut winning_team : Option<Arc<Mutex<TeamData>>> = None;
-            let mut is_rtf_game = true;*/
             self.broadcast_tx.send(ClientCommand::Tick (self.counter, (if self.mode == GameMode::Strategy { "1" } else { "0" }).to_string())).expect("Broadcast failed");
-            /*for i in 0..self.clients.len() {
-                let cli = self.clients[i].clone();
-                let mut lockah = cli.lock().await;
-                if lockah.m_castle.is_some() && lockah.m_castle.as_ref().unwrap().lock().await.identify() != 'R' {
-                    is_rtf_game = false;
-                }
-                let mut args = vec![self.counter.to_string(), (if self.mode == GameMode::Strategy { "1" } else { "0" }).to_string()];
-                if lockah.m_castle.is_some() {
-                    args.push((lockah.m_castle.as_ref().unwrap().lock().await.health()).to_string());
-                }
-                lockah.send_protocol_message(ProtocolMessage {
-                    command: 't',
-                    args
-                }).await;
-                if lockah.is_alive().await {
-                    living += 1;
-                    winning_player = Some(self.clients[i].clone());
-                    if lockah.team.is_some() {
-                        if !winning_team.is_some() || !Arc::ptr_eq(winning_team.as_ref().unwrap(), lockah.team.as_ref().unwrap()) { // If there's no winning team, or the winning team != the current team, incremeent - you've found a new living team
-                            living_teams += 1;
-                        }
-                        winning_team = Some(lockah.team.as_ref().unwrap().clone());
-                    }
-                    else { // Unaffiliated players are considered as teams of their own
-                        living_teams += 1;
-                    }
-                }
-                else {
-                    if lockah.m_castle.is_some() {
-                        lockah.m_castle = None;
-                        lockah.send_protocol_message(ProtocolMessage {
-                            command: 'l',
-                            args: vec![]
-                        }).await;
-                        if self.is_io {
-                            let banner = lockah.banner;
-                            self.clear_of_banner(banner).await;
-                        }
-                    }
-                }
-            }*/
             if self.is_rtf_game {
                 self.set_mode(GameMode::Play);
             }
@@ -471,29 +433,6 @@ impl Server {
                         self.reset().await;
                     }
                 }
-                /*if living_teams == 0 {
-                }
-                else if living_teams == 1 { // This will also evaluate true if there's only one player on the field
-                    println!("GAME ENDS WITH A WINNER");
-                    let winning_banner = if living > 1 {
-                        winning_team.as_ref().unwrap().lock().await.banner_id
-                    }
-                    else {
-                        winning_player.as_ref().unwrap().lock().await.send_protocol_message(ProtocolMessage {
-                            command: 'W',
-                            args: vec![]
-                        }).await;
-                        winning_player.as_ref().unwrap().lock().await.banner
-                    };
-                    self.broadcast(ProtocolMessage {
-                        command: 'E',
-                        args: vec![winning_banner.to_string()]
-                    }, None).await;
-                    println!("Win broadcast complete.");
-                }
-                if living_teams < 2 {
-                    self.reset().await;
-                }*/
             }
         }
     }
@@ -506,8 +445,8 @@ impl Server {
                 }
                 1.0
             },
-            GameMode::Strategy => FPS * 40.0,
-            GameMode::Play => FPS * 20.0
+            GameMode::Strategy => FPS * self.times.0,
+            GameMode::Play => FPS * self.times.1
         } as u32;
         self.mode = mode;
     }
@@ -591,21 +530,6 @@ impl Server {
     }
 
     async fn get_team_of_banner(&self, banner : usize) -> Option<usize> {
-        /*for lock in &self.clients {
-            match lock.try_lock() {
-                Ok(client) => {
-                    if client.banner == banner && client.team.is_some() {
-                        return Some(client.team.as_ref().unwrap().clone());
-                    }
-                },
-                Err(_) => {
-                    let client = sender.as_mut().unwrap();
-                    if client.banner == banner && client.team.is_some() {
-                        return Some(client.team.as_ref().unwrap().clone());
-                    }
-                }
-            }
-        }*/
         for team in 0..self.teams.len() {
             for member in &self.teams[team].members {
                 if *member == banner {
@@ -1258,7 +1182,8 @@ async fn main(){
         broadcast_tx        : broadcast_tx.clone(),
         living_players      : 0,
         winning_banner      : 0,
-        is_rtf_game         : true
+        is_rtf_game         : true,
+        times               : (40.0, 20.0)
     };
     //rx.close().await;
     server.load_config().await;
