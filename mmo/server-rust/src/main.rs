@@ -296,12 +296,28 @@ impl Server {
                             };
                             x_lockah.physics.shape.translate(intasectah.1 * ratio); // I have no clue if this is correct but it works well enough
                             y_lockah.physics.shape.translate(intasectah.1 * -1.0 * (1.0 - ratio));
-                            /*if sum != 0.0 {
+                            if sum != 0.0 {
+                                // WIP real collisions - very complex, I don't know enough physics rn but am learning
+                                /*let m1 = y_lockah.physics.mass;
+                                let m2 = x_lockah.physics.mass;
+                                let total = m1 + m2;
+                                let merged = y_lockah.physics.velocity * m1 + x_lockah.physics.velocity * m2;
+                                y_lockah.physics.velocity = (merged - ((y_lockah.physics.velocity - x_lockah.physics.velocity) * m2 * y_lockah.physics.restitution)) / total;
+                                x_lockah.physics.velocity = (merged - ((x_lockah.physics.velocity - y_lockah.physics.velocity) * m1 * x_lockah.physics.restitution)) / total;*/
+                                // DUMB FULLY ELASTIC VERSION
+                                //y_lockah.physics.velocity = (y_lockah.physics.velocity * (m1 - m2) + x_lockah.physics.velocity * 2.0 * m1) / total;
+                                //x_lockah.physics.velocity = (x_lockah.physics.velocity * (m2 - m1) + y_lockah.physics.velocity * 2.0 * m2) / total;
+                                // DUMB OLD VERSION
+                                /*let (x_para, x_perp) = x_lockah.physics.velocity.cut(intasectah.1);
+                                let (y_para, y_perp) = y_lockah.physics.velocity.cut(intasectah.1);
+                                y_lockah.physics.velocity = x_perp * (y_lockah.physics.velocity.magnitude()/sum) + y_para; // add the old perpendicular component, allowing it to slide
+                                x_lockah.physics.velocity = y_perp * (x_lockah.physics.velocity.magnitude()/sum) + x_para;*/
+                                // VERY DUMB VERSION
                                 let (x_para, x_perp) = x_lockah.physics.velocity.cut(intasectah.1);
                                 let (y_para, y_perp) = y_lockah.physics.velocity.cut(intasectah.1);
-                                y_lockah.physics.velocity = x_perp * (x_lockah.physics.mass / y_lockah.physics.mass) + y_para; // add the old perpendicular component, allowing it to slide
-                                x_lockah.physics.velocity = y_perp * (y_lockah.physics.mass / x_lockah.physics.mass) + x_para; // reciprocal ratio
-                            }*/
+                                y_lockah.physics.velocity = y_perp + x_para * (x_lockah.physics.velocity.magnitude() / sum);
+                                x_lockah.physics.velocity = x_perp + y_para * (y_lockah.physics.velocity.magnitude() / sum);
+                            }
                         }
                     }
                 }

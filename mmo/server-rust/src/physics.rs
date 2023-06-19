@@ -123,7 +123,8 @@ pub struct PhysicsObject {
     pub solid         : bool,
     pub angle_v       : f32,
     pub mass          : f32,
-    pub fixed         : bool
+    pub fixed         : bool,
+    pub restitution : f32
 }
 
 
@@ -138,7 +139,8 @@ impl PhysicsObject {
             solid : false, // Everything is solid by default
             angle_v : 0.0,
             fixed : false,
-            mass : w * h // Assume a density of 1. If you want to change the *density* elsewhere, just multiply it by the new density!
+            mass : w * h, // Assume a density of 1. If you want to change the *density* elsewhere, just multiply it by the new density!
+            restitution : 0.5 // Assume collisions are truly inelastic by default
         }
     }
 

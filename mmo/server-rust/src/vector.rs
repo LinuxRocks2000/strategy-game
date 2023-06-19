@@ -116,6 +116,10 @@ impl Vector2 {
     pub fn is_basically(&self, mag : f32) -> bool {
         (self.magnitude() - mag).abs() < 0.001
     }
+
+    pub fn sqrt(&self) -> Vector2 {
+        Vector2::new_from_manda(self.magnitude().sqrt(), self.angle())
+    }
 }
 
 impl std::fmt::Debug for Vector2 {
@@ -171,6 +175,17 @@ impl std::ops::Mul <f32> for Vector2 {
         Vector2 {
             x : self.x * value,
             y : self.y * value
+        }
+    }
+}
+
+impl std::ops::Div <f32> for Vector2 {
+    type Output = Vector2;
+
+    fn div (self, value : f32) -> Vector2 {
+        Vector2 {
+            x : self.x / value,
+            y : self.y / value
         }
     }
 }
