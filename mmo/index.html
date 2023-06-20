@@ -1543,10 +1543,10 @@
                 canPlaceCastle = true;
                 Object.values(objects).forEach(object => {
                     if (object){
-                        if (mousePos.gameX > object.x - 200 &&
-                            mousePos.gameX < object.x + object.w + 200 &&
-                            mousePos.gameY > object.y - 200 &&
-                            mousePos.gameY < object.y + object.h + 200) {
+                        if (mousePos.gameX > object.x - object.w/2 - 300 &&
+                            mousePos.gameX < object.x + object.w/2 + 300 &&
+                            mousePos.gameY > object.y - object.h/2 - 300 &&
+                            mousePos.gameY < object.y + object.h/2 + 300) {
                             canPlaceCastle = false;
                         }
                     }
