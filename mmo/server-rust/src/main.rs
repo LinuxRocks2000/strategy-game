@@ -313,10 +313,17 @@ impl Server {
                                 y_lockah.physics.velocity = x_perp * (y_lockah.physics.velocity.magnitude()/sum) + y_para; // add the old perpendicular component, allowing it to slide
                                 x_lockah.physics.velocity = y_perp * (x_lockah.physics.velocity.magnitude()/sum) + x_para;*/
                                 // VERY DUMB VERSION
+                                let m1 = y_lockah.physics.mass;
+                                let m2 = x_lockah.physics.mass;
+                                let total = m1 + m2;
                                 let (x_para, x_perp) = x_lockah.physics.velocity.cut(intasectah.1);
                                 let (y_para, y_perp) = y_lockah.physics.velocity.cut(intasectah.1);
-                                y_lockah.physics.velocity = y_perp + x_para * (x_lockah.physics.velocity.magnitude() / sum);
-                                x_lockah.physics.velocity = x_perp + y_para * (y_lockah.physics.velocity.magnitude() / sum);
+                                if !y_lockah.physics.fixed {
+                                    y_lockah.physics.velocity = y_perp + x_para * (m2 / total);
+                                }
+                                if !x_lockah.physics.fixed {
+                                    x_lockah.physics.velocity = x_perp + y_para * (m1 / total);
+                                }
                             }
                         }
                     }
