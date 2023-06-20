@@ -1385,6 +1385,7 @@ async fn main(){
 #[cfg(test)]
 pub mod tests {
     use crate::Vector2;
+    use crate::gamepiece::npc;
     #[test]
     fn check_vector_creation() {
         let vec = Vector2::new_from_manda(1.0, 0.0);
@@ -1419,5 +1420,18 @@ pub mod tests {
         println!("Yep {}", para.magnitude());
         assert!(para.is_basically(1.0));
         assert!(perp.is_basically(1.0));
+    }
+
+    #[test]
+    fn check_loopize_basics() {
+        assert_eq!(npc::loopize(1.0, 2.0), -1.0);
+        assert_eq!(npc::loopize(1.0, 0.0), 1.0);
+    }
+
+    #[test]
+    fn check_loopize_complex() {
+        assert_eq!(npc::loopize(1.0, -1.0), 2.0);
+        assert_eq!(npc::loopize(-1.0, 1.0), -2.0);
+        assert_eq!(npc::loopize_about(2.0, 0.0, 3.0), -1.0);
     }
 }

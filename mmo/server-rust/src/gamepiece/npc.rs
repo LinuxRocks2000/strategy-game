@@ -8,10 +8,10 @@ use super::TargetingFilter;
 use super::TargetingMode;
 use std::f32::consts::PI;
 
-fn loopize_about(set : f32, cur : f32, about : f32) -> f32 {
+pub fn loopize_about(set : f32, cur : f32, about : f32) -> f32 {
     if (set - cur).abs() >= about / 2.0 {
         if set > cur {
-            return -about - set + cur;
+            return -(about - set + cur);
         }
         else {
             return about - cur + set;
@@ -20,8 +20,8 @@ fn loopize_about(set : f32, cur : f32, about : f32) -> f32 {
     set - cur
 }
 
-fn loopize(set : f32, cur : f32) -> f32 {
-    set - cur//loopize_about(set, cur, PI * 2.0)
+pub fn loopize(set : f32, cur : f32) -> f32 {
+    /*set - cur*/loopize_about(set, cur, PI * 2.0)
 }
 
 pub struct Red {

@@ -853,6 +853,10 @@
                         ctx.fillStyle = "grey";
                         ctx.fillRect(convertedX - (item.w/2 * scaleDown), convertedY - (item.h/2 * scaleDown), item.w * scaleDown, item.h * scaleDown);
                     }
+                    else if (!isNaN(item.value)) { // All NPCs are numbers 0-9
+                        ctx.fillStyle = "white";
+                        ctx.fillRect(convertedX - 1, convertedY - 1, 2, 2);
+                    }
                 });
             }
 
