@@ -184,6 +184,10 @@ impl PhysicsObject {
         self.shape.a
     }
 
+    pub fn thrust(&mut self, amount : f32) {
+        self.velocity += Vector2::new_from_manda(amount, self.angle());
+    }
+
     pub fn set_cx(&mut self, x : f32) {
         self.shape.x = x - self.shape.w / 2.0;
     }
@@ -194,6 +198,10 @@ impl PhysicsObject {
 
     pub fn set_angle(&mut self, a : f32) {
         self.shape.a = a;
+    }
+
+    pub fn change_angle(&mut self, by : f32) {
+        self.shape.a += by;
     }
 
     pub fn width(&self) -> f32 {

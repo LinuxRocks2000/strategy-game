@@ -23,6 +23,7 @@ use rand::Rng;
 use prng::Mulberry32;
 use crate::gamepiece::fighters::*;
 use crate::gamepiece::misc::*;
+use crate::gamepiece::npc;
 use crate::config::Config;
 use futures::{
     future::FutureExt, // for `.fuse()`
@@ -198,6 +199,42 @@ impl Server {
         self.place(Arc::new(Mutex::new(Fort::new())), x, y, a, sender).await
     }
 
+    async fn place_random_npc(&mut self) { // Drop a random npc
+        if self.living_players != 1 && (self.isnt_rtf > 0) { // Being alone in the io mode server activates a hidden "practice mode" where npcs can spawn
+            return;
+        }
+        let mut randlock = self.random.lock().await;
+        let x : f32 = (randlock.next() % self.gamesize) as f32;
+        let y : f32 = (randlock.next() % self.gamesize) as f32;
+        let chance = randlock.next() % 5;
+        drop(randlock);
+        let thing : Arc<Mutex<dyn GamePiece + Send + Sync>> = match chance {
+            0 | 1 => {
+                Arc::new(Mutex::new(npc::Red::new()))
+            },
+            2 | 3 => {
+                Arc::new(Mutex::new(npc::White::new()))
+            },
+            4 => {
+                Arc::new(Mutex::new(npc::Black::new()))
+            },
+            _ => {
+                println!("THIS IS PROBABLY NOT A GOOD THING");
+                return;
+            }
+        };
+        for object in &self.objects { // This part is fine
+            let lelock = object.lock().await;
+            if lelock.identify() == 'c' || lelock.identify() == 'R' {
+                if (lelock.physics.cx() - x).abs() < 400.0 && (lelock.physics.cy() - y).abs() < 400.0 {
+                    println!("Berakx");
+                    return;
+                }
+            }
+        }
+        self.place(thing, x, y, 0.0, None).await;
+    }
+
     async fn place_random_rubble(&mut self) { // Drop a random chest or wall (or something else, if I add other things)
         let mut randlock = self.random.lock().await;
         let x : f32 = (randlock.next() % self.gamesize) as f32;
@@ -222,6 +259,7 @@ impl Server {
             }
         }
         self.place(thing, x, y, 0.0, None).await;
+        self.place_random_npc().await;
     }
 
     pub async fn shoot(&mut self, position : Vector2, velocity : Vector2, range : i32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {

@@ -6,6 +6,7 @@ use std::f32::consts::PI;
 use crate::vector::Vector2;
 pub mod fighters;
 pub mod misc;
+pub mod npc;
 
 
 pub struct ShooterProperties {
@@ -19,7 +20,8 @@ pub struct ShooterProperties {
 
 pub enum TargetingFilter {
     Any,
-    Fighters
+    Fighters,
+    Castles
 }
 
 
@@ -201,12 +203,14 @@ impl GamePieceBase {
                         },
                         TargetingFilter::Fighters => {
                             match object.identify() {
-                                'f' | 'h' | 'R' | 't' | 's' => {
-                                    true
-                                },
-                                _ => {
-                                    false
-                                }
+                                'f' | 'h' | 'R' | 't' | 's' => true,
+                                _ => false
+                            }
+                        },
+                        TargetingFilter::Castles => {
+                            match object.identify() {
+                                'R' | 'c' => true,
+                                _ => false
                             }
                         }
                     };
@@ -214,7 +218,7 @@ impl GamePieceBase {
                         let val = match self.targeting.mode {
                             TargetingMode::Nearest => {
                                 let dist = (object.physics.vector_position() - self.physics.vector_position()).magnitude();
-                                if dist >= self.targeting.range.0 && dist <= self.targeting.range.1 {
+                                if (dist >= self.targeting.range.0 && dist <= self.targeting.range.1) || self.targeting.range.1 == 0.0 {
                                     Some(dist)
                                 }
                                 else {

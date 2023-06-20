@@ -1633,6 +1633,51 @@
                         ctx.fillStyle = "gold";
                         ctx.fillRect(object.x - 15, object.y - 5, 30, 20);
                     }
+                    else if (object.value == "0") {
+                        ctx.strokeStyle = "red";
+                        ctx.fillStyle = "brown";
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.translate(object.x, object.y);
+                        ctx.rotate(object.angle);
+                        ctx.moveTo(0, 0);
+                        ctx.arc(0, 0, 5, 0, Math.PI * 2);
+                        ctx.lineTo(25, 0);
+                        ctx.rotate(-object.angle);
+                        ctx.translate(-object.x, -object.y);
+                        ctx.stroke();
+                        ctx.fill();
+                    }
+                    else if (object.value == "1") {
+                        ctx.strokeStyle = "white";
+                        ctx.fillStyle = "brown";
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.translate(object.x, object.y);
+                        ctx.rotate(object.angle);
+                        ctx.moveTo(0, 0);
+                        ctx.arc(0, 0, 5, 0, Math.PI * 2);
+                        ctx.lineTo(25, 0);
+                        ctx.rotate(-object.angle);
+                        ctx.translate(-object.x, -object.y);
+                        ctx.stroke();
+                        ctx.fill();
+                    }
+                    else if (object.value == "2") {
+                        ctx.strokeStyle = "black";
+                        ctx.fillStyle = "white";
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.translate(object.x, object.y);
+                        ctx.rotate(object.angle);
+                        ctx.moveTo(0, 0);
+                        ctx.arc(0, 0, 5, 0, Math.PI * 2);
+                        ctx.lineTo(25, 0);
+                        ctx.rotate(-object.angle);
+                        ctx.translate(-object.x, -object.y);
+                        ctx.stroke();
+                        ctx.fill();
+                    }
                     else {
                         art.drawObj(object);
                     }
