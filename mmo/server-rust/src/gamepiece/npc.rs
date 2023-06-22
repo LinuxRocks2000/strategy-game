@@ -1,4 +1,4 @@
-// Grand unified file for fighter types
+// Grand unified file for non player character types
 
 use super::GamePieceBase;
 use super::GamePiece;
@@ -6,23 +6,9 @@ use crate::Server;
 use crate::physics::PhysicsObject;
 use super::TargetingFilter;
 use super::TargetingMode;
+use crate::vector::Vector2;
 use std::f32::consts::PI;
-
-pub fn loopize_about(set : f32, cur : f32, about : f32) -> f32 {
-    if (set - cur).abs() >= about / 2.0 {
-        if set > cur {
-            return -(about - set + cur);
-        }
-        else {
-            return about - cur + set;
-        }
-    }
-    set - cur
-}
-
-pub fn loopize(set : f32, cur : f32) -> f32 {
-    /*set - cur*/loopize_about(set, cur, PI * 2.0)
-}
+use crate::functions::*;
 
 pub struct Red {
     start_cooldown : u32
@@ -34,6 +20,10 @@ pub struct White {
 
 pub struct Black {
     start_cooldown : u32
+}
+
+pub struct Target {
+    count : u32
 }
 
 impl Red {
@@ -56,6 +46,14 @@ impl Black {
     pub fn new() -> Self {
         Self {
             start_cooldown : 0
+        }
+    }
+}
+
+impl Target {
+    pub fn new() -> Self {
+        Self {
+            count : 0
         }
     }
 }
@@ -192,5 +190,42 @@ impl GamePiece for Black {
             self.start_cooldown -= 1;
             master.physics.velocity = master.physics.velocity * 0.8;
         }
+    }
+}
+
+impl GamePiece for Target {
+    fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
+        thing.ttl = 1800;
+        thing.max_health = 3.0;
+        thing.speed_cap = 10.0;
+        thing.collision_info.damage = 0.1; // inoffensive
+        thing
+    }
+
+    fn obtain_physics(&self) -> PhysicsObject {
+        PhysicsObject::new(0.0, 0.0, 40.0, 40.0, 0.0)
+    }
+
+    fn identify(&self) -> char {
+        '3'
+    }
+
+    fn get_does_collide(&self, id : char) -> bool {
+        id == 'b' // is unaffected by everything but bullets
+    }
+
+    fn capture(&self) -> u32 {
+        30
+    }
+
+    fn update(&mut self, master : &mut GamePieceBase, server : &mut Server) {
+        if master.physics.velocity.magnitude() != master.speed_cap || self.count == 0 {
+            let item = rand::random::<f32>() * PI * 2.0;
+            master.physics.velocity = Vector2::new_from_manda(master.speed_cap, item);
+            self.count = 60;
+        }
+        self.count -= 1;
+        master.physics.set_cx(coterminal(master.physics.cx(), server.gamesize as f32));
+        master.physics.set_cy(coterminal(master.physics.cy(), server.gamesize as f32));
     }
 }

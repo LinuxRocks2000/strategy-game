@@ -1107,6 +1107,12 @@
                     cappedLine(73 * scaleFactor, (443 + x * 103) * scaleFactor, 407 * scaleFactor);
                 }
                 inventoryStuff.forEach((item, i) => {
+                    if (item.stack == undefined) {
+                        item.stack = Infinity;
+                    }
+                    if (item.stack == 0) {
+                        ctx.globalAlpha = 0.3;
+                    }
                     var x = 74 + (i % 2) * 203.5;
                     var y = 340 + 103 * Math.floor(i / 2);
                     x *= scaleFactor;
@@ -1126,19 +1132,22 @@
                     ctx.fillStyle = "#484D51";
                     ctx.textAlign = "left";
                     ctx.fillText(zeroes(item.cost), x + 130 * scaleFactor, y + 68 * scaleFactor);
-                    if (didSelectHome && playing && (isStratChange || isRTF) && score >= item.cost){
-                        if (mousePos.realX > x && mousePos.realX < (x + 203.5 * scaleFactor) && sidebarY > y && sidebarY < (y + 103 * scaleFactor)) {
-                            inventoryHovered = i;
-                            ctx.strokeStyle = "yellow";
-                            ctx.lineWidth = 2;
-                            ctx.strokeRect(x, y, 203.5 * scaleFactor, 103 * scaleFactor);
-                        }
-                        if (inventoryPlace == i){
-                            ctx.strokeStyle = "red";
-                            ctx.lineWidth = 4;
-                            ctx.strokeRect(x, y, 203.5 * scaleFactor, 103 * scaleFactor);
+                    if (item.stack != 0) {
+                        if (didSelectHome && playing && (isStratChange || isRTF) && score >= item.cost){
+                            if (mousePos.realX > x && mousePos.realX < (x + 203.5 * scaleFactor) && sidebarY > y && sidebarY < (y + 103 * scaleFactor)) {
+                                inventoryHovered = i;
+                                ctx.strokeStyle = "yellow";
+                                ctx.lineWidth = 2;
+                                ctx.strokeRect(x, y, 203.5 * scaleFactor, 103 * scaleFactor);
+                            }
+                            if (inventoryPlace == i){
+                                ctx.strokeStyle = "red";
+                                ctx.lineWidth = 4;
+                                ctx.strokeRect(x, y, 203.5 * scaleFactor, 103 * scaleFactor);
+                            }
                         }
                     }
+                    ctx.globalAlpha = 1;
                 });
 
                 if (keysDown["c"] && myCastle) {
@@ -1353,12 +1362,14 @@
                 else if (command == "d"){
                     ctx.fillStyle = "red";
                     var object = objects[args[0] - 0];
-                    if (object.value == "n"){
-                        exploder.x = object.x;
-                        exploder.y = object.y;
-                        exploder.time = 5;
+                    if (object) {
+                        if (object.value == "n"){
+                            exploder.x = object.x;
+                            exploder.y = object.y;
+                            exploder.time = 5;
+                        }
+                        delete objects[args[0] - 0];
                     }
-                    delete objects[args[0] - 0];
                 }
                 else if (command == "u") {
                     objects[args[0]].upgrades.push(args[1]);
@@ -1396,6 +1407,7 @@
                         {
                             name: "+GUN SPEED",
                             cost: 30,
+                            stack: 1,
                             cbk: () => {
                                 sendProtocolMessage("C", [30]);
                                 rtfUpgrade("b");
@@ -1404,6 +1416,7 @@
                         {
                             name: "SNIPER",
                             cost: 40,
+                            stack: 1,
                             cbk: () => {
                                 sendProtocolMessage("C", [40]);
                                 rtfUpgrade("s");
@@ -1412,9 +1425,19 @@
                         {
                             name: "SPEEDSHIP",
                             cost: 70,
+                            stack: 1,
                             cbk: () => {
                                 sendProtocolMessage("C", [70]);
                                 rtfUpgrade("f");
+                            }
+                        },
+                        {
+                            name: "FAST HEAL",
+                            cost: 150,
+                            stack: 1,
+                            cbk: () => {
+                                sendProtocolMessage("C", [150]);
+                                rtfUpgrade("h");
                             }
                         }
                     ];
@@ -1682,6 +1705,16 @@
                         ctx.stroke();
                         ctx.fill();
                     }
+                    else if (object.value == "3") {
+                        ctx.strokeStyle = "magenta";
+                        ctx.fillStyle = "yellow";
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.translate(object.x, object.y);
+                        ctx.arc(0, 0, 20, 0, Math.PI * 2);
+                        ctx.translate(-object.x, -object.y);
+                        ctx.fill();
+                    }
                     else {
                         art.drawObj(object);
                     }
@@ -1838,6 +1871,7 @@
                         if (inventoryHovered != -1) {
                             if (inventoryStuff[inventoryHovered].cbk){
                                 inventoryStuff[inventoryHovered].cbk();
+                                inventoryStuff[inventoryHovered].stack --;
                             }
                             else {
                                 if (inventoryStuff[inventoryHovered].place) {

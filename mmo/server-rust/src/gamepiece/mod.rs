@@ -7,6 +7,7 @@ use crate::vector::Vector2;
 pub mod fighters;
 pub mod misc;
 pub mod npc;
+use crate::functions::coterminal;
 
 
 pub struct ShooterProperties {
@@ -43,17 +44,6 @@ pub struct Targeting {
 pub enum ExplosionMode {
     None,
     Radiation(f32, f32, f32)
-}
-
-
-fn coterminal<T: Copy + std::ops::Add<U, Output=T> + std::ops::Sub<U, Output=T> + std::cmp::PartialOrd<U>, U: Copy + std::cmp::PartialOrd<T> + std::ops::Sub<U, Output=U>>(mut thing : T, round : U) -> T {
-    while thing < (round - round) {
-        thing = thing + round;
-    }
-    while thing > round {
-        thing = thing - round;
-    }
-    thing
 }
 
 
@@ -418,7 +408,8 @@ impl GamePieceBase {
 
 
 pub struct Castle {
-    is_rtf : bool
+    is_rtf : bool,
+    healinup : f32
 }
 pub struct Fort {}
 
@@ -426,7 +417,8 @@ pub struct Fort {}
 impl Castle {
     pub fn new(is_rtf : bool) -> Self {
         Self {
-            is_rtf
+            is_rtf,
+            healinup: 0.002
         }
     }
 }
@@ -463,7 +455,7 @@ impl GamePiece for Castle {
         master.physics.set_cx(coterminal(master.physics.cx(), server.gamesize as f32));
         master.physics.set_cy(coterminal(master.physics.cy(), server.gamesize as f32));
         if master.health < master.max_health {
-            master.health += 0.002;
+            master.health += self.healinup;
         }
         if !self.is_rtf {
             master.physics.velocity = Vector2::empty();
@@ -491,10 +483,13 @@ impl GamePiece for Castle {
         println!("{}", upgrade);
         match upgrade.as_str() {
             "b" => { // shot counter speed
-                master.shooter_properties.counter = 5;
+                master.shooter_properties.counter = 9;
             },
             "f" => { // fast
                 master.speed_cap = 40.0;
+            },
+            "h" => { // heal
+                self.healinup = 0.007;
             },
             &_ => {
                 

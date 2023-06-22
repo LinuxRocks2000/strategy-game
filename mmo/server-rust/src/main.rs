@@ -9,6 +9,7 @@ pub mod physics;
 pub mod gamepiece;
 pub mod prng;
 pub mod config;
+pub mod functions;
 use crate::vector::Vector2;
 use futures_util::{SinkExt, StreamExt, stream::SplitSink};
 use warp::Filter;
@@ -94,28 +95,29 @@ impl fmt::Debug for ClientCommand {
 
 
 pub struct Server {
-    mode            : GameMode,
-    password        : String,
-    objects         : Vec<Arc<Mutex<GamePieceBase>>>,
-    teams           : Vec<TeamData>,
-    banners         : Vec<Arc<String>>,
-    gamesize        : u32,
-    authenticateds  : u32,
-    terrain_seed    : u32,
-    top_id          : u32,
-    counter         : u32,
-    costs           : bool, // Whether or not to cost money when placing a piece
-    random          : Arc<Mutex<Mulberry32>>,
-    place_timer     : u32,
-    autonomous      : Option<(u32, u32, u32, u32)>,
-    is_io           : bool, // IO mode gets rid of the winner system (game never ends) and allows people to join at any time.
-    passwordless    : bool,
-    config          : Option<Arc<Config>>,
-    broadcast_tx    : tokio::sync::broadcast::Sender<ClientCommand>,
-    living_players  : u32,
-    winning_banner  : usize,
-    isnt_rtf        : u32,
-    times           : (f32, f32)
+    mode              : GameMode,
+    password          : String,
+    objects           : Vec<Arc<Mutex<GamePieceBase>>>,
+    teams             : Vec<TeamData>,
+    banners           : Vec<Arc<String>>,
+    gamesize          : u32,
+    authenticateds    : u32,
+    terrain_seed      : u32,
+    top_id            : u32,
+    counter           : u32,
+    costs             : bool, // Whether or not to cost money when placing a piece
+    random            : Arc<Mutex<Mulberry32>>,
+    place_timer       : u32,
+    autonomous        : Option<(u32, u32, u32, u32)>,
+    is_io             : bool, // IO mode gets rid of the winner system (game never ends) and allows people to join at any time.
+    passwordless      : bool,
+    config            : Option<Arc<Config>>,
+    broadcast_tx      : tokio::sync::broadcast::Sender<ClientCommand>,
+    living_players    : u32,
+    winning_banner    : usize,
+    isnt_rtf          : u32,
+    times             : (f32, f32),
+    clients_connected : u32
 }
 
 enum AuthState {
@@ -206,7 +208,7 @@ impl Server {
         let mut randlock = self.random.lock().await;
         let x : f32 = (randlock.next() % self.gamesize) as f32;
         let y : f32 = (randlock.next() % self.gamesize) as f32;
-        let chance = randlock.next() % 5;
+        let chance = randlock.next() % 6;
         drop(randlock);
         let thing : Arc<Mutex<dyn GamePiece + Send + Sync>> = match chance {
             0 | 1 => {
@@ -217,6 +219,9 @@ impl Server {
             },
             4 => {
                 Arc::new(Mutex::new(npc::Black::new()))
+            },
+            5 => {
+                Arc::new(Mutex::new(npc::Target::new()))
             },
             _ => {
                 println!("THIS IS PROBABLY NOT A GOOD THING");
@@ -427,6 +432,9 @@ impl Server {
     }
 
     async fn mainloop(&mut self) {
+        if self.clients_connected == 0 {
+            self.clear_banners();
+        }
         if self.mode == GameMode::Play {
             self.deal_with_objects().await;
             self.place_timer -= 1;
@@ -644,10 +652,14 @@ impl Server {
             self.objects.remove(0);
         }
         self.set_mode(GameMode::Waiting);
+        self.clear_banners();
+        self.load_config().await;
+    }
+
+    fn clear_banners(&mut self) {
         while self.banners.len() > 1 {
             self.banners.remove(1); // Leave the first one, which is the null banner
         }
-        self.load_config().await;
     }
 
     async fn load_config(&mut self) {
@@ -758,7 +770,12 @@ impl Client {
     }
 
     async fn send_text(&mut self, text : &str) {
-        self.tx.send(Message::text(text)).await.expect("WHOOPS! COULDN'T SEND!");
+        match self.tx.send(Message::text(text)).await {
+            Ok(_) => {}
+            Err(_) => {
+                println!("COULD NOT SEND A MESSAGE? This may be a borked pipe or summat'.");
+            }
+        }
     }
 
     async fn collect(&mut self, amount : i32) {
@@ -1053,6 +1070,7 @@ impl Client {
 
 
 async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>, broadcaster : tokio::sync::broadcast::Sender<ClientCommand>, commandset : tokio::sync::mpsc::Sender<ServerCommand>){
+    commandset.send(ServerCommand::Connect).await.unwrap();
     let mut receiver = broadcaster.subscribe();
     let (tx, mut rx) = websocket.split();
     let mut moi = Client::new(tx, commandset);
@@ -1167,6 +1185,7 @@ async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>, broadcas
     if serverlock.is_io || serverlock.mode == GameMode::Waiting {
         serverlock.clear_of_banner(moi.banner).await;
     }
+    moi.commandah.send(ServerCommand::Disconnect).await.unwrap();
     println!("Dropped client");
 }
 
@@ -1208,7 +1227,9 @@ enum ServerCommand {
     Autonomous (u32, u32, u32),
     TeamNew (String, String),
     LivePlayerInc (Option<usize>, ClientMode),
-    LivePlayerDec (Option<usize>, ClientMode)
+    LivePlayerDec (Option<usize>, ClientMode),
+    Connect,
+    Disconnect
 }
 
 
@@ -1240,7 +1261,8 @@ async fn main(){
         living_players      : 0,
         winning_banner      : 0,
         isnt_rtf            : 0,
-        times               : (40.0, 20.0)
+        times               : (40.0, 20.0),
+        clients_connected   : 0
     };
     //rx.close().await;
     server.load_config().await;
@@ -1271,6 +1293,12 @@ async fn main(){
                 Ok (ServerCommand::IoModeToggle) => {
                     lawk.is_io = !lawk.is_io;
                     println!("Set io mode to {}", lawk.is_io);
+                },
+                Ok (ServerCommand::Disconnect) => {
+                    lawk.clients_connected -= 1;
+                },
+                Ok (ServerCommand::Connect) => {
+                    lawk.clients_connected += 1;
                 },
                 Ok (ServerCommand::PasswordlessToggle) => {
                     lawk.passwordless = !lawk.passwordless;
