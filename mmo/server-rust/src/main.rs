@@ -200,7 +200,7 @@ impl Server {
     }
 
     async fn place_random_npc(&mut self) { // Drop a random npc
-        if self.living_players != 1 && (self.isnt_rtf > 0) { // Being alone in the io mode server activates a hidden "practice mode" where npcs can spawn
+        if self.living_players != 1 && (self.living_players == 0 || self.isnt_rtf > 0) { // Being alone in the io mode server activates a hidden "practice mode" where npcs can spawn
             return;
         }
         let mut randlock = self.random.lock().await;

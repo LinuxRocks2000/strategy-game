@@ -491,7 +491,7 @@ impl GamePiece for Castle {
         println!("{}", upgrade);
         match upgrade.as_str() {
             "b" => { // shot counter speed
-                master.shooter_properties.counter = 10;
+                master.shooter_properties.counter = 5;
             },
             "f" => { // fast
                 master.speed_cap = 40.0;

@@ -155,6 +155,7 @@ impl GamePiece for Black {
         thing.targeting.range = (0.0, 0.0); // no range
         thing.ttl = 1800;
         thing.max_health = 1.0;
+        thing.speed_cap = 35.0; // Very slightly slower than a speedship
         thing.collision_info.damage = 2.0;
         thing
     }
@@ -168,7 +169,7 @@ impl GamePiece for Black {
     }
 
     fn get_does_collide(&self, id : char) -> bool {
-        id == 'c' || id == 'R'
+        id == 'c' || id == 'R' || id == 'b'
     }
 
     fn capture(&self) -> u32 {
@@ -182,7 +183,7 @@ impl GamePiece for Black {
                 master.physics.change_angle(loopize(goalangle, master.physics.angle()) * 0.2);
                 master.physics.thrust(1.0);
                 if (master.physics.velocity.angle() - goalangle).abs() > PI/4.0 {
-                    master.physics.velocity = master.physics.velocity * 0.9;
+                    master.physics.velocity = master.physics.velocity * 0.95;
                 }
             },
             None => {}
