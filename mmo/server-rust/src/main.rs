@@ -53,7 +53,8 @@ pub struct Client {
     m_castle          : Option<Arc<Mutex<GamePieceBase>>>,
     mode              : ClientMode,
     team              : Option<usize>,
-    commandah         : tokio::sync::mpsc::Sender<ServerCommand>
+    commandah         : tokio::sync::mpsc::Sender<ServerCommand>,
+    is_team_leader    : bool
 }
 
 
@@ -76,6 +77,7 @@ struct TeamData {
 #[derive(Clone)]
 enum ClientCommand { // Commands sent to clients
     Send (ProtocolMessage),
+    SendToTeam (ProtocolMessage, usize),
     Tick (u32, String),
     ScoreTo (usize, i32),
     CloseAll
@@ -86,6 +88,7 @@ impl fmt::Debug for ClientCommand {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Client Command {}", match self {
             ClientCommand::Send (_) => "Send",
+            ClientCommand::SendToTeam (_, _) => "SendToTeam",
             ClientCommand::Tick (_, _) => "Tick",
             ClientCommand::ScoreTo (_, _) => "ScoreTo",
             ClientCommand::CloseAll => "CloseAll"
@@ -123,7 +126,7 @@ pub struct Server {
 enum AuthState {
     Error,
     Single,
-    Team (usize),
+    Team (usize, bool),
     Spectator
 }
 
@@ -432,7 +435,7 @@ impl Server {
     }
 
     async fn mainloop(&mut self) {
-        if self.clients_connected == 0 {
+        if self.is_io && self.clients_connected == 0 {
             self.clear_banners();
         }
         if self.mode == GameMode::Play {
@@ -545,6 +548,10 @@ impl Server {
         self.broadcast_tx.send(ClientCommand::Send(message)).expect("Broadcast failed");
     }
 
+    async fn broadcast_to_team<'a>(&'a self, message : ProtocolMessage, team : usize) {
+        self.broadcast_tx.send(ClientCommand::SendToTeam(message, team)).expect("Broadcast failed");
+    }
+
     async fn add(&mut self, pc : Arc<Mutex<GamePieceBase>>, mut sender : Option<&mut Client>) {
         let mut piece = pc.lock().await;
         piece.set_id(self.top_id);
@@ -571,7 +578,7 @@ impl Server {
             for team in &self.teams {
                 let is_allowed : bool = password == *team.password;
                 if is_allowed {
-                    return AuthState::Team (team.id);
+                    return AuthState::Team (team.id, team.members.len() == 0);
                 }
             }
         }
@@ -765,7 +772,8 @@ impl Client {
             m_castle: None,
             mode: ClientMode::None,
             team: None,
-            commandah
+            commandah,
+            is_team_leader: false
         }
     }
 
@@ -827,10 +835,14 @@ impl Client {
                         server.user_logged_in(self).await;
                         server.banner_add(Some(self), Arc::new(message.args[1].clone())).await;
                     },
-                    AuthState::Team (team) => {
+                    AuthState::Team (team, tl) => {
                         println!("New user has authenticated as player in team {}", server.banners[server.teams[team].banner_id]);
                         self.team = Some(team);
                         self.send_singlet('s').await;
+                        if tl {
+                            self.send_singlet('?').await;
+                            self.is_team_leader = true;
+                        }
                         server.user_logged_in(self).await;
                         server.banner_add(Some(self), Arc::new(message.args[1].clone())).await;
                         server.teams[team].members.push(self.banner);
@@ -1018,6 +1030,22 @@ impl Client {
                         castle.physics.angle_v *= 0.9;
                     }
                 },
+                'T' => { // Talk
+                    let args = vec![format!("<span style='color: pink;'>{} SAYS</span>: {}", server.banners[self.banner], message.args[0])];
+                    if self.team.is_some() && message.args[0].chars().nth(0) != Some('!') {
+                        server.broadcast_to_team(ProtocolMessage {
+                            command: 'B',
+                            args
+                        }, self.team.unwrap()).await;
+                    }
+                    else {
+                        server.broadcast(ProtocolMessage {
+                            command: 'B',
+                            args
+                        }).await;
+                    }
+                    println!("{} says {}", server.banners[self.banner], message.args[0]);
+                },
                 'U' => {
                     // Upgrade.
                     if message.args.len() != 2 {
@@ -1143,6 +1171,11 @@ async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>, broadcas
                     Ok (ClientCommand::Send (message)) => {
                         moi.send_protocol_message(message).await;
                     },
+                    Ok (ClientCommand::SendToTeam (message, team)) => {
+                        if moi.team.is_some() && moi.team.unwrap() == team {
+                            moi.send_protocol_message(message).await;
+                        }
+                    },
                     Ok (ClientCommand::ScoreTo (banner, amount)) => {
                         if moi.banner == banner {
                             moi.score += amount;
@@ -1229,7 +1262,8 @@ enum ServerCommand {
     LivePlayerInc (Option<usize>, ClientMode),
     LivePlayerDec (Option<usize>, ClientMode),
     Connect,
-    Disconnect
+    Disconnect,
+    Broadcast (String)
 }
 
 
@@ -1300,6 +1334,12 @@ async fn main(){
                 Ok (ServerCommand::Connect) => {
                     lawk.clients_connected += 1;
                 },
+                Ok (ServerCommand::Broadcast (message)) => {
+                    lawk.broadcast(ProtocolMessage {
+                        command: 'B',
+                        args: vec![message]
+                    }).await;
+                },
                 Ok (ServerCommand::PasswordlessToggle) => {
                     lawk.passwordless = !lawk.passwordless;
                     lawk.broadcast(ProtocolMessage {
@@ -1358,6 +1398,9 @@ async fn main(){
                 },
                 "toggle passwordless" => {
                     ServerCommand::PasswordlessToggle
+                },
+                "broadcast" => {
+                    ServerCommand::Broadcast (format!("<span style='color: gold; font-weight: bold;'>GAMESERVER MANAGER SAYS</span>: <b>{}</b>", input("Message: ")))
                 },
                 "autonomous" => {
                     let min_players = match input("Minimum player count to start: ").parse::<u32>() {
