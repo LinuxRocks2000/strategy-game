@@ -205,7 +205,7 @@ impl Server {
     }
 
     async fn place_random_npc(&mut self) { // Drop a random npc
-        if self.living_players != 1 && (self.living_players == 0 || self.isnt_rtf > 0) { // Being alone in the io mode server activates a hidden "practice mode" where npcs can spawn
+        if self.living_players == 0 || self.isnt_rtf > 0 { // All RTF games will spawn NPCs
             return;
         }
         let mut randlock = self.random.lock().await;
@@ -438,14 +438,6 @@ impl Server {
         if self.is_io && self.clients_connected == 0 {
             self.clear_banners();
         }
-        if self.mode == GameMode::Play {
-            self.deal_with_objects().await;
-            self.place_timer -= 1;
-            if self.place_timer <= 0 {
-                self.place_timer = self.random.lock().await.next() % 200 + 50;
-                self.place_random_rubble().await;
-            }
-        }
         if self.mode == GameMode::Waiting {
             if self.is_io {
                 self.start().await;
@@ -505,6 +497,14 @@ impl Server {
                         self.reset().await;
                     }
                 }
+            }
+        }
+        if self.mode == GameMode::Play {
+            self.deal_with_objects().await;
+            self.place_timer -= 1;
+            if self.place_timer <= 0 {
+                self.place_timer = self.random.lock().await.next() % 200 + 50;
+                self.place_random_rubble().await;
             }
         }
     }
@@ -617,10 +617,7 @@ impl Server {
     }
 
     async fn metadata(&mut self, user : &mut Client) {
-        user.send_protocol_message(ProtocolMessage {
-            command: 'm',
-            args: vec![self.gamesize.to_string(), self.terrain_seed.to_string()]
-        }).await;
+        println!("Sending metadata to {}", self.banners[user.banner]);
         for index in 0..self.banners.len() {
             let banner = &self.banners[index];
             let team = self.get_team_of_banner(index).await;
@@ -637,6 +634,10 @@ impl Server {
         for piece in &self.objects {
             user.send_protocol_message(piece.lock().await.get_new_message().await).await;
         }
+        user.send_protocol_message(ProtocolMessage { // m also doubles as a "you have all the data" message
+            command: 'm',
+            args: vec![self.gamesize.to_string(), self.terrain_seed.to_string()]
+        }).await;
     }
 
     async fn user_logged_in(&mut self, user : &mut Client) {
