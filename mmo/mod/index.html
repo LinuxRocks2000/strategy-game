@@ -11,7 +11,7 @@
     <body>
         <div id="gameui">
             <canvas id="background" style="display: none;"></canvas>
-            <canvas id="game" style="">
+            <canvas id="game">
                 Use a real browser to play this game, dammit
             </canvas>
         </div>
@@ -24,7 +24,7 @@
                     <input type="checkbox" name="spectator" id="spectator" onchange="updateForm()">
                     Spectating? <label for="spectator" id="speclabel"></label>
                     <h2 class="hide_when_spectating">Banner</h2>
-                    <input class="hide_when_spectating" type="text" name="banner-name" id="banner" placeholder="Your anonymous handle" />
+                    <input class="hide_when_spectating" type="text" name="banner-name" id="banner" placeholder="Your anonymous handle" onfocusout="randomizeBanner()"/>
                     <h2 class="hide_when_spectating">Password</h2>
                     <input class="hide_when_spectating" type="text" name="password-input" id="password" placeholder="Leave empty unless otherwise notified"/>
                     <h2 class="hide_when_spectating">Play Mode</h2>
@@ -51,7 +51,7 @@
                     contributions from many others, especially <span class="banner">Jakie<span>1000D</span></span>.
                 </p>
                 <div>
-                    Most MMOSG servers come with a built-in UI, but as this is an external UI, you have to specify a server.
+                    Most MMOSG servers come with a built-in UI, but as this is an external modified UI, you have to specify a server.
                     You can manually type a url for it in the sidebar, or select one of of the <b>Famous Servers</b>:
                     <ul id="famous">
                         <li onclick="set('wss://swaous.asuscomm.com/mmosg/game')">The 24/7 Server - swaous.asuscomm.com</li>
@@ -70,6 +70,21 @@
         <div id="failedToConnect" class="textview">
             <div>
                 Connection failed.
+            </div>
+        </div>
+        <div id="youLose" class="textview">
+            <div>
+                You have died.
+            </div>
+        </div>
+        <div id="youWin" class="textview">
+            <div>
+                You win!
+            </div>
+        </div>
+        <div id="gameOver" class="textview">
+            <div>
+                The game has ended. <span id="winnerBanner"></span> wins.
             </div>
         </div>
         <script>
@@ -94,7 +109,11 @@
             function prerenderBackground() {
 
             }
+            const diva = false; // set to true to make the webgl image a certain size (defined below) and usable for downloading or whatever
+            const divaW = 5000;
+            const divaH = 5000;
         </script>
+        <script src="vector.js"></script>
         <script src="metaballs-gl.js"></script>
         <script src="mod.js"></script>
     </body>

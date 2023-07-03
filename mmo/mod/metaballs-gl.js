@@ -1,10 +1,12 @@
-const NUM_METABALLS = 100;
+const NUM_METABALLS = 50;
 
 function prerenderBackground(size) {
     var canvas = document.getElementById("background");
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    var gl = canvas.getContext("webgl");
+    var gl = diva ? canvas.getContext("webgl", { preserveDrawingBuffer: true }) : canvas.getContext("webgl");
+    if (diva) {
+        canvas.width = divaW;
+        canvas.height = divaH;
+    }
     function compileShader(shaderSource, shaderType) {
         var shader = gl.createShader(shaderType);
         gl.shaderSource(shader, shaderSource);
@@ -38,12 +40,18 @@ function prerenderBackground(size) {
     precision highp float;
     uniform vec3 balls[` + NUM_METABALLS + `];
     uniform vec2 offset;
+    uniform float yoopta;
+
+    float w(float r, float x, float y) {
+        return r / (abs(x) + abs(y));
+    }
+
     void main(){
         const float BANDCOUNT = 4.0;
         float total = 0.0;
         for (int i = 0; i < ` + NUM_METABALLS + `; i ++) {
             float dx = balls[i].x + offset.x - gl_FragCoord.x;
-            float dy = balls[i].y + offset.y - gl_FragCoord.y;
+            float dy = balls[i].y - yoopta + offset.y - yoopta - gl_FragCoord.y;
             float r = balls[i].z;
             total += (r * r) / (dx * dx + dy * dy);
         }
@@ -75,13 +83,14 @@ function prerenderBackground(size) {
         leBalls.push({
             x: Math.random() * size,
             y: Math.random() * size,
-            r: Math.random() * 100,
-            xv: (Math.random() - 0.5) * 2,
-            yv: (Math.random() - 0.5) * 2
+            r: 50 + Math.random() * 150,
+            xv: (Math.random() - 0.5),
+            yv: (Math.random() - 0.5)
         });
     }
     var ballsHandle = getUniformLocation(program, 'balls');
     var offsetHandle = getUniformLocation(program, "offset");
+    var yoopta = getUniformLocation(program, "yoopta");
     var toGPU = new Float32Array(3 * NUM_METABALLS);
 
     function updateBalls() {
@@ -93,27 +102,37 @@ function prerenderBackground(size) {
         gl.uniform3fv(ballsHandle, toGPU);
     }
 
+    var tick = 0;
+
     function main(x, y) {
+        var leWidth = window.innerWidth;
+        var leHeight = window.innerHeight;
+        if (diva) {
+            leWidth = divaW;
+            leHeight = divaH;
+        }
+        tick++;
         offset[0] = -x;
         offset[1] = y;
         gl.uniform2fv(offsetHandle, offset);
+        gl.uniform1f(yoopta, size/2 - leWidth/2);
         leBalls.forEach(ball => {
             ball.x += ball.xv;
             ball.y += ball.yv;
-            if (ball.x > size) {
-                ball.x = size;
+            if (ball.x > size + leWidth/2) {
+                ball.x = size + leWidth/2;
                 ball.xv *= -1;
             }
-            if (ball.x < 0) {
-                ball.x = 0;
+            if (ball.x < -leWidth/2) {
+                ball.x = -leWidth/2;
                 ball.xv *= -1;
             }
-            if (ball.y > window.innerHeight) {
-                ball.y = window.innerHeight;
+            if (ball.y > size + leHeight/2) {
+                ball.y = size + leHeight/2;
                 ball.yv *= -1;
             }
-            if (ball.y < -size + window.innerHeight) {
-                ball.y = -size + window.innerHeight;
+            if (ball.y < -leHeight/2) {
+                ball.y = -leHeight/2;
                 ball.yv *= -1;
             }
         });
@@ -129,5 +148,14 @@ function prerenderBackground(size) {
     var positionHandle = getAttribLocation(program, 'position');
     gl.enableVertexAttribArray(positionHandle);
     gl.vertexAttribPointer(positionHandle, 2, gl.FLOAT, gl.FALSE, 2 * 4, 0);
-    return main;
+    if (diva) {
+        var divaMain = () => {
+            main(0, 0);
+            requestAnimationFrame(divaMain);
+        };
+        divaMain();
+    }
+    else {
+        return main;
+    }
 }
