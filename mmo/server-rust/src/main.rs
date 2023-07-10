@@ -1106,10 +1106,7 @@ async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>, broadcas
     let serverlock = server.lock().await; // HEY, YOU! IF YOU'RE THINKING OF MAKING THIS MUTABLE, THINK AGAIN
     // I know making this mutable is the kind of dumb thing you would do. But just SET UP MESSAGE PASSING MORE.
     if serverlock.passwordless {
-        moi.send_protocol_message (ProtocolMessage {
-            command: 'p',
-            args: vec![]
-        }).await;
+        moi.send_singlet('p').await;
     }
     drop(serverlock);
     'cliloop: loop {
@@ -1133,6 +1130,9 @@ async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>, broadcas
                             };
                             if text == "_"{
                                 moi.send_text("_").await;
+                            }
+                            else if text == "HELLO MMOSG" {
+                                moi.send_text("HELLO MMOSG").await;
                             }
                             else {
                                 let p = ProtocolMessage::parse_string(text.to_string());
@@ -1179,11 +1179,12 @@ async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>, broadcas
                     },
                     Ok (ClientCommand::ScoreTo (banner, amount)) => {
                         if moi.banner == banner {
-                            moi.score += amount;
+                            moi.collect(amount).await;
+                            /*moi.score += amount;
                             moi.send_protocol_message(ProtocolMessage {
                                 command: 'S',
                                 args: vec![moi.score.to_string()]
-                            }).await;
+                            }).await;*/
                         }
                     },
                     Ok (ClientCommand::CloseAll) => {
