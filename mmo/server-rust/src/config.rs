@@ -37,7 +37,8 @@ struct ServerConfigFile {
     autonomous      : Option<AutonomousDef>,
     teams           : Option<Vec<TeamDef>>,
     strat_secs      : Option<f32>,
-    play_secs       : Option<f32>
+    play_secs       : Option<f32>,
+    headless        : Option<bool>
 }
 
 pub struct Config {
@@ -57,6 +58,9 @@ impl Config {
 
     pub async fn load_into(&self, server : &mut Server) {
         server.gamesize = self.json.world_size;
+        if self.json.headless.is_some() {
+            server.is_headless = self.json.headless.unwrap();
+        }
         if self.json.password.is_some() {
             server.passwordless = false;
             server.password = self.json.password.as_ref().unwrap().clone();

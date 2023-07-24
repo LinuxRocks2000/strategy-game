@@ -24,10 +24,24 @@ function randomizeBanner() {
     }
 }
 
-class Protocol {
+function todo(thing) {
+    throw "TODO: " + thing;
+}
+
+
+class ProtocolMessageReceivedEvent extends Event {
+    constructor(command, args, initDict = undefined) {
+        super("protocolmessagereceived", initDict);
+        this.command = command;
+        this.args = args;
+    }
+}
+
+
+class Protocol extends EventTarget {
     constructor(socket, onmessage) {
+        super();
         this.socket = socket;
-        this.uponmessage = onmessage;
         socket.onmessage = (message) => { this.message_recvd(message) };
         setInterval(() => {
             this.isOnline = this.pong; // if it's received a pong in 500ms, it's online; otherwise, it is not. Either way send a ping.
@@ -58,7 +72,7 @@ class Protocol {
                 buffer = "";
                 i++;
             }
-            this.uponmessage(command, args);
+            this.dispatchEvent(new ProtocolMessageReceivedEvent(command, args));
         }
     }
 
@@ -83,6 +97,34 @@ class Protocol {
 
     ping() {
         this.socket.send("_");
+    }
+
+    connect(banner, password, playMode, isSpectating) {
+        this.send('c', [
+            isSpectating ? "" : password,
+            banner,
+            isSpectating ? "" : playMode
+        ]);
+    }
+
+    move(id, x, y, a) {
+         this.send("m", [id, x, y, a]);
+    }
+
+    cost(amount) {
+        this.send("C", [amount]);
+    }
+
+    rtf(thrust, left, right, brake, shoot) {
+        this.send("R", [thrust, left, right, brake, shoot]);
+    }
+
+    talk(message) { // This function will see significant changes as I actually implement chatroom!
+        this.send("T", [message]);
+    }
+
+    upgrade(id, upgrade) {
+        this.send("U", [id, upgrade]);
     }
 }
 
@@ -355,7 +397,7 @@ class GameObject {
         this.aOld = this.a;
         if (this.goalPos.hasChanged) {
             this.goalPos.hasChanged = false;
-            game.comms.send("m", [this.id, this.goalPos.x, this.goalPos.y, this.goalPos.a]);
+            game.comms.move(this.id, this.goalPos.x, this.goalPos.y, this.goalPos.a);
         }
     }
 
@@ -414,16 +456,24 @@ class GameObject {
         }
     }
 
-    isCompassVisible() {
+    isCompassVisible() { // Can it be seen on a compass?
         const hidden = ["s", "b"]; // List of types that can't be displayed on minimap/compass
-        return this.isOurs || hidden.indexOf(this.type) == -1;
+        var isSniper = this.upgrades.indexOf("s")!= -1;
+        return this.isOurs || (hidden.indexOf(this.type) == -1 && !isSniper);
+    }
+
+    upgrade(upgrade) {
+        this.upgrades.push(upgrade);
     }
 }
 
 
 class Game {
     constructor(socket) {
-        this.comms = new Protocol(socket, (cmd, argz) => { this.onmessage(cmd, argz) });
+        this.comms = new Protocol(socket);
+        this.comms.addEventListener("protocolmessagereceived", (evt) => {
+            this.onmessage(evt.command, evt.args);
+        });
         this.gamesize = 0;
         this.canvas = document.getElementById("game");
         this.ctx = this.canvas.getContext("2d");
@@ -452,11 +502,16 @@ class Game {
             spectating: false,
             online: false,
             moveShips: false,
+            isTeamLeader: false,
+            wallsRemaining: 4, // 4 on the first turn
+            wallsTurn: 2, // 2 every next turn, but Extra Walls can increase this.
             wait: true,
+            score: 0,
             countdown: 0, // Set by the ! command
             counter: 0, // Set by the t command
             tickTime: 1000 / 30, // Number of milliseconds between ticks or !s; this is adjusted based on real-time data.
             lastTickTime: -1,
+            canPlaceObject: false, // if the mouse is close to the home castle with 400 tolerance
             mouseWithinNarrowField: false, // if the mouse is close to any game object with 400 tolerance
             mouseWithinWideField: false, // if the mouse is close to any game object with 600 tolerance
             getTableBite() { // Don't ask
@@ -491,7 +546,8 @@ class Game {
         this.sideScroll = 0;
         this.sidebar = new Sidebar();
         this.objects = {};
-        this.banners = {};
+        this.banners = {}; // Relating banners to banner names
+        this.teams = {}; // Relating player banners to team banners
         this.bgCall = undefined;
         this.mine = [];
         this.locked = false; // for objects to not be edited at the same time
@@ -504,13 +560,15 @@ class Game {
         };
     }
 
+    attemptWall() {
+        if (this.status.canPlaceObject && this.status.wallsRemaining > 0) {
+
+        }
+    }
+
     start(formdata) {
-        var is_spectating = formdata.get("spectator") == "on";
-        this.comms.send('c', [
-            is_spectating ? "" : formdata.get("password-input"),
-            formdata.get("banner-name"),
-            is_spectating ? "" : formdata.get("playmode")
-        ]);
+        var isSpectating = formdata.get("spectator") == "on";
+        this.comms.connect(formdata.get("banner-name"), formdata.get("password-input"), formdata.get("playmode"), isSpectating);
     }
 
     onmessage(command, args) {
@@ -528,8 +586,17 @@ class Game {
         else if (command == "!") {
             this.status.countdown = args[0] - 0;
         }
+        else if (command == "?") {
+            this.status.isTeamLeader = true;
+        }
+        else if (command == "B") {
+            console.log("banner " + args[1] + " sent a message with priority " + args[2] + ": " + args[0]);
+        }
         else if (command == "s") {
 
+        }
+        else if (command == "S") {
+            this.status.score = args[0] - 0;
         }
         else if (command == "e") {
             
@@ -562,6 +629,9 @@ class Game {
         }
         else if (command == "b") {
             this.banners[args[0]] = args[1];
+            if (args.length > 2) {
+                this.teams[args[1]] = args[2];
+            }
         }
         else if (command == "a") {
             this.mine.push(args[0]);
@@ -583,6 +653,13 @@ class Game {
             setTimeout(() => {
                 window.location.reload();
             }, 3000);
+        }
+        else if (command == "u") {
+            this.objects[args[0]].upgrade(args[1]);
+        }
+        else {
+            console.warn("UNRECOGNIZED COMMAND " + command + "!");
+            console.log(args);
         }
         if (command == "t" || command == "!") {
             this.status.moveShips = args[1] == '1';
@@ -675,11 +752,15 @@ class Game {
         this.renderUI(interpolator);
     }
 
+    mouseFieldCheckOnOne(size, obj) {
+        var bbox = obj.box;
+        return this.gameX > bbox[0] - size && this.gameX < bbox[2] + size && this.gameY > bbox[1] - size && this.gameY < bbox[3] + size;
+    }
+
     mouseFieldCheck(size) {
         var objects = Object.values(this.objects);
         for (var i = 0; i < objects.length; i++) {
-            var bbox = objects[i].box;
-            if (this.gameX > bbox[0] - size && this.gameX < bbox[2] + size && this.gameY > bbox[1] - size && this.gameY < bbox[3] + size) {
+            if (this.mouseFieldCheckOnOne(size, objects[i])) {
                 return true;
             }
         }
@@ -691,6 +772,9 @@ class Game {
         this.gameY = clamp(0, Math.round(this.cY + this.mouseY - window.innerHeight / 2), this.gamesize);
         this.status.mouseWithinNarrowField = this.mouseFieldCheck(400);
         this.status.mouseWithinWideField = this.mouseFieldCheck(600);
+        if (this.castle) {
+            this.status.canPlaceObject = this.mouseFieldCheckOnOne(400, this.castle);
+        }
     }
 
     interactionLoop() { // Is called as much as possible; handles interaction with the user

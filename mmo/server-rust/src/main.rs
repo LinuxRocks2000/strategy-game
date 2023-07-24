@@ -74,26 +74,14 @@ struct TeamData {
 }
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 enum ClientCommand { // Commands sent to clients
     Send (ProtocolMessage),
-    SendToTeam (ProtocolMessage, usize),
+    //SendToTeam (ProtocolMessage, usize),
     Tick (u32, String),
     ScoreTo (usize, i32),
-    CloseAll
-}
-
-
-impl fmt::Debug for ClientCommand {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Client Command {}", match self {
-            ClientCommand::Send (_) => "Send",
-            ClientCommand::SendToTeam (_, _) => "SendToTeam",
-            ClientCommand::Tick (_, _) => "Tick",
-            ClientCommand::ScoreTo (_, _) => "ScoreTo",
-            ClientCommand::CloseAll => "CloseAll"
-        })
-    }
+    CloseAll,
+    ChatRoom (String, usize, u8, Option<usize>) // message, sender, priority
 }
 
 
@@ -120,7 +108,8 @@ pub struct Server {
     winning_banner    : usize,
     isnt_rtf          : u32,
     times             : (f32, f32),
-    clients_connected : u32
+    clients_connected : u32,
+    is_headless       : bool
 }
 
 enum AuthState {
@@ -397,7 +386,7 @@ impl Server {
                 self.broadcast(ProtocolMessage {
                     command: 'M',
                     args: args_vec
-                }).await;
+                });
             }
             obj.update(self).await;
             // Do death checks a bit late (pun not intended) so objects have a chance to self-rescue.
@@ -408,7 +397,7 @@ impl Server {
                 self.broadcast(ProtocolMessage {
                     command: 'd',
                     args: vec![obj.get_id().to_string()]
-                }).await;
+                });
             }
             i += 1;
         }
@@ -428,7 +417,7 @@ impl Server {
                 self.broadcast(ProtocolMessage {
                     command: 'd',
                     args: vec![obj.get_id().to_string()]
-                }).await;
+                });
             }
             i += 1;
         }
@@ -448,7 +437,7 @@ impl Server {
                     self.broadcast(ProtocolMessage {
                         command: '!',
                         args: vec![self.autonomous.unwrap().2.to_string()]
-                    }).await;
+                    });
                     if self.autonomous.unwrap().2 <= 0 {
                         self.start().await;
                     }
@@ -472,7 +461,7 @@ impl Server {
                     self.broadcast(ProtocolMessage {
                         command: 'T',
                         args: vec![]
-                    }).await;
+                    });
                     println!("Tie broadcast complete.");
                     self.reset().await;
                 }
@@ -483,7 +472,7 @@ impl Server {
                             self.broadcast(ProtocolMessage {
                                 command: 'E',
                                 args: vec![team.banner_id.to_string()]
-                            }).await;
+                            });
                             self.reset().await;
                             return;
                         }
@@ -493,7 +482,7 @@ impl Server {
                         self.broadcast(ProtocolMessage {
                             command: 'E',
                             args: vec![self.winning_banner.to_string()]
-                        }).await;
+                        });
                         self.reset().await;
                     }
                 }
@@ -544,12 +533,16 @@ impl Server {
         }
     }
 
-    async fn broadcast<'a>(&'a self, message : ProtocolMessage) {
+    fn broadcast<'a>(&'a self, message : ProtocolMessage) {
         self.broadcast_tx.send(ClientCommand::Send(message)).expect("Broadcast failed");
     }
 
-    async fn broadcast_to_team<'a>(&'a self, message : ProtocolMessage, team : usize) {
+    /*fn broadcast_to_team<'a>(&'a self, message : ProtocolMessage, team : usize) {
         self.broadcast_tx.send(ClientCommand::SendToTeam(message, team)).expect("Broadcast failed");
+    }*/
+
+    fn chat(&self, content : String, sender : usize, priority : u8, to_whom : Option<usize>) {
+        self.broadcast_tx.send(ClientCommand::ChatRoom (content, sender, priority, to_whom)).expect("Chat message failed");
     }
 
     async fn add(&mut self, pc : Arc<Mutex<GamePieceBase>>, mut sender : Option<&mut Client>) {
@@ -563,7 +556,7 @@ impl Server {
                 args: vec![piece.get_id().to_string()]
             }).await;
         }
-        self.broadcast(piece.get_new_message().await).await;
+        self.broadcast(piece.get_new_message().await);
         self.objects.push(pc.clone());
     }
 
@@ -601,7 +594,7 @@ impl Server {
             command: 'b',
             args
         };
-        self.broadcast(message).await;
+        self.broadcast(message);
         bannah
     }
 
@@ -691,7 +684,7 @@ impl Server {
 }
 
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ProtocolMessage {
     command : char,
     args    : Vec<String>
@@ -1032,19 +1025,27 @@ impl Client {
                     }
                 },
                 'T' => { // Talk
-                    let args = vec![format!("<span style='color: pink;'>{} SAYS</span>: {}", server.banners[self.banner], message.args[0])];
+                    /*let args = vec![format!("<span style='color: pink;'>{} SAYS</span>: {}", server.banners[self.banner], message.args[0])];
                     if self.team.is_some() && message.args[0].chars().nth(0) != Some('!') {
                         server.broadcast_to_team(ProtocolMessage {
                             command: 'B',
                             args
-                        }, self.team.unwrap()).await;
+                        }, self.team.unwrap());
                     }
                     else {
                         server.broadcast(ProtocolMessage {
                             command: 'B',
                             args
-                        }).await;
-                    }
+                        });
+                    }*/
+                    server.chat(message.args[0].clone(), self.banner, 0,
+                        if self.team.is_none() || message.args[1] == "broadcast" {
+                            None
+                        }
+                        else {
+                            self.team
+                        }
+                    );
                     println!("{} says {}", server.banners[self.banner], message.args[0]);
                 },
                 'U' => {
@@ -1071,7 +1072,7 @@ impl Client {
                     server.broadcast(ProtocolMessage {
                         command: 'u',
                         args: vec![id.to_string(), message.args[1].clone()]
-                    }).await;
+                    });
                 }
                 _ => {
                     message.poison("INAPPROPRIATE COMMAND");
@@ -1172,11 +1173,11 @@ async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>, broadcas
                     Ok (ClientCommand::Send (message)) => {
                         moi.send_protocol_message(message).await;
                     },
-                    Ok (ClientCommand::SendToTeam (message, team)) => {
+                    /*Ok (ClientCommand::SendToTeam (message, team)) => {
                         if moi.team.is_some() && moi.team.unwrap() == team {
                             moi.send_protocol_message(message).await;
                         }
-                    },
+                    },*/
                     Ok (ClientCommand::ScoreTo (banner, amount)) => {
                         if moi.banner == banner {
                             moi.collect(amount).await;
@@ -1190,7 +1191,18 @@ async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>, broadcas
                     Ok (ClientCommand::CloseAll) => {
                         break 'cliloop;
                     },
-                    _ => {}
+                    Ok (ClientCommand::ChatRoom (content, sender, priority, target)) => {
+                        if target.is_none() || target == moi.team {
+                            moi.send_protocol_message(ProtocolMessage {
+                                command: 'B',
+                                args: vec![content, sender.to_string(), priority.to_string()]
+                            }).await;
+                        }
+                    },
+                    //_ => {}
+                    Err (_) => {
+
+                    }
                 }
             }
         }
@@ -1298,10 +1310,12 @@ async fn main(){
         winning_banner      : 0,
         isnt_rtf            : 0,
         times               : (40.0, 20.0),
-        clients_connected   : 0
+        clients_connected   : 0,
+        is_headless         : false
     };
     //rx.close().await;
     server.load_config().await;
+    let headless = server.is_headless;
     println!("Started server with password {}, terrain seed {}", server.password, server.terrain_seed);
     let server_mutex = Arc::new(Mutex::new(server));
     let server_mutex_loopah = server_mutex.clone();
@@ -1337,17 +1351,14 @@ async fn main(){
                     lawk.clients_connected += 1;
                 },
                 Ok (ServerCommand::Broadcast (message)) => {
-                    lawk.broadcast(ProtocolMessage {
-                        command: 'B',
-                        args: vec![message]
-                    }).await;
+                    lawk.chat(message, 0, 6, None);
                 },
                 Ok (ServerCommand::PasswordlessToggle) => {
                     lawk.passwordless = !lawk.passwordless;
                     lawk.broadcast(ProtocolMessage {
                         command: 'p',
                         args: vec![]
-                    }).await;
+                    });
                     println!("Set passwordless mode to {}", lawk.passwordless);
                 },
                 Ok(ServerCommand::LivePlayerInc (team, mode)) => {
@@ -1379,63 +1390,65 @@ async fn main(){
         }
     });
 
-    tokio::task::spawn(async move {
-        loop {
-            let command = input("");
-            let to_send = match command.as_str() {
-                "start" => { // Notes: starting causes the deadlock, but flipping doesn't, so the problem isn't merely locking/unlocking.
-                    ServerCommand::Start
-                },
-                "flip" => {
-                    println!("Flipping stage");
-                    ServerCommand::Flip
-                },
-                "team new" => {
-                    let name = input("Team name: ");
-                    let password = input("Team password: ");
-                    ServerCommand::TeamNew(name, password)
-                },
-                "toggle iomode" => {
-                    ServerCommand::IoModeToggle
-                },
-                "toggle passwordless" => {
-                    ServerCommand::PasswordlessToggle
-                },
-                "broadcast" => {
-                    ServerCommand::Broadcast (format!("<span style='color: gold; font-weight: bold;'>GAMESERVER MANAGER SAYS</span>: <b>{}</b>", input("Message: ")))
-                },
-                "autonomous" => {
-                    let min_players = match input("Minimum player count to start: ").parse::<u32>() {
-                        Ok(num) => num,
-                        Err(_) => {
-                            println!("Invalid number.");
-                            continue;
-                        }
-                    };
-                    let max_players = match input("Maximum player count: ").parse::<u32>() {
-                        Ok(num) => num,
-                        Err(_) => {
-                            println!("Invalid number.");
-                            continue;
-                        }
-                    };
-                    let auto_timeout = match input("Timer: ").parse::<u32>() {
-                        Ok(num) => num,
-                        Err(_) => {
-                            println!("Invalid number.");
-                            continue;
-                        }
-                    };
-                    ServerCommand::Autonomous (min_players, max_players, auto_timeout)
-                },
-                _ => {
-                    println!("Invalid command.");
-                    continue;
-                }
-            };
-            commandset.send(to_send).await.expect("OOOOOOPS");
-        }
-    });
+    if !headless {
+        tokio::task::spawn(async move {
+            loop {
+                let command = input("");
+                let to_send = match command.as_str() {
+                    "start" => { // Notes: starting causes the deadlock, but flipping doesn't, so the problem isn't merely locking/unlocking.
+                        ServerCommand::Start
+                    },
+                    "flip" => {
+                        println!("Flipping stage");
+                        ServerCommand::Flip
+                    },
+                    "team new" => {
+                        let name = input("Team name: ");
+                        let password = input("Team password: ");
+                        ServerCommand::TeamNew(name, password)
+                    },
+                    "toggle iomode" => {
+                        ServerCommand::IoModeToggle
+                    },
+                    "toggle passwordless" => {
+                        ServerCommand::PasswordlessToggle
+                    },
+                    "broadcast" => {
+                        ServerCommand::Broadcast (input("Message: "))
+                    },
+                    "autonomous" => {
+                        let min_players = match input("Minimum player count to start: ").parse::<u32>() {
+                            Ok(num) => num,
+                            Err(_) => {
+                                println!("Invalid number.");
+                                continue;
+                            }
+                        };
+                        let max_players = match input("Maximum player count: ").parse::<u32>() {
+                            Ok(num) => num,
+                            Err(_) => {
+                                println!("Invalid number.");
+                                continue;
+                            }
+                        };
+                        let auto_timeout = match input("Timer: ").parse::<u32>() {
+                            Ok(num) => num,
+                            Err(_) => {
+                                println!("Invalid number.");
+                                continue;
+                            }
+                        };
+                        ServerCommand::Autonomous (min_players, max_players, auto_timeout)
+                    },
+                    _ => {
+                        println!("Invalid command.");
+                        continue;
+                    }
+                };
+                commandset.send(to_send).await.expect("OOOOOOPS");
+            }
+        });
+    }
 
     let servah = warp::any().map(move || server_mutex.clone());
     let websocket = warp::path("game")

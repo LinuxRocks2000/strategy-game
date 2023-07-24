@@ -136,10 +136,14 @@
                     <li>
                         <h3 class="framedesc">T
                             <span>message<span>The message to broadcast.</span></span>
+                            <span>target<span>"broadcast" to send the message to all users. "team" to send the message to team-only,
+                                IF APPLICABLE. If you are not in a team, it will be sent to everyone anyways.</span></span>
                         </h3>
-                        Send a message to the server chatroom. If it's a team game, it will usually only be sent to other team members;
-                        messages sent with "!" will always broadcast to everyone no matter what. The banner name of the sender is attached by the server.
-                        This is an experimental feature: the structure will probably change dramatically over time, and client support is sparse.
+                        Send a message to the server chatroom. It can be sent to only team members or to the entire
+                        world. If you are in a team, the default should be send to team members only. How servers handle
+                        this is not necessarily universal - it is the choice of the server and the config file of that server
+                        to permit global (non-team-only) chat, to allow team-only chat, or to allow chat at all.
+                        This is <b>subject to change!</b>
                     </li>
                     <li>
                         <h3 class="framedesc">U
@@ -212,9 +216,14 @@
                     <li>
                         <h3 class="framedesc">B
                             <span>message<span>The message sent to the chatroom.</span></span>
+                            <span>sender<span>The banner of the sender. 0 for server owner.</span></span>
+                            <span>priority<span>Priority - 0 to 6. How the server assigns priorities is implementation-specific
+                                and subject to change, but increasing emphasis should always be applied as priority increases.
+                                This can be handled merely by changing font-size.</span></span>
                         </h3>
                         A message has been sent to the chatroom that this client is allowed to see. How it is displayed is a matter of choice.
-                        Comes with HTML at the moment, but <b>this is subject to change.</b>
+                        May come with HTML markup, but it is up to the client to render it: the client may opt to ignore it, or display it as plaintext.
+                        This is <b>subject to change</b>.
                     </li>
                     <li>
                         <h3 class="framedesc">E

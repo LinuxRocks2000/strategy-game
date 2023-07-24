@@ -284,7 +284,7 @@ impl GamePieceBase {
             self.health = 0.0;
         }
         while self.broadcasts.len() > 0 {
-            server.broadcast(self.broadcasts.remove(0)).await;
+            server.broadcast(self.broadcasts.remove(0));
         }
         if self.speed_cap != 0.0 {
             if self.physics.velocity.magnitude() > self.speed_cap {
