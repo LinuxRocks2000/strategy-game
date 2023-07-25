@@ -129,6 +129,8 @@ p{
     font-weight: bold;
     color: transparent;
     background-clip: text;
+    -webkit-background-clip: text; /* Vendor prefixes courtesy of Richard (@_destined). His truename is probably not Richard but that's what we all call him. Don't ask. */
+    -moz-background-clip: text;
     animation-name: rainbow;
     animation-duration: 60s;
     animation-iteration-count: infinite;
