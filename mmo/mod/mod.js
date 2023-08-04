@@ -52,6 +52,7 @@ class Protocol extends EventTarget {
             this.pong = false; // After sending, we can't have received a pong!
         }, 500);
         this.isOnline = false;
+        this.rtfHasEmptied = true;
     }
 
     message_recvd(raw) {
@@ -126,6 +127,11 @@ class Protocol extends EventTarget {
             brake  = brake  ? "1" : "0";
             shoot  = shoot  ? "1" : "0";
             this.send("R", [thrust, left, right, brake, shoot]);
+            this.rtfHasEmptied = false;
+        }
+        else if (!this.rtfHasEmptied) {
+            this.send("R", ["0", "0", "0", "0", "0"]);
+            this.rtfHasEmptied = true;
         }
     }
 
@@ -242,10 +248,15 @@ class Sidebar {
             ctx.moveTo(226, 992);
             ctx.arc(209, 992, 17, 0, Math.PI * 2);
             ctx.stroke();
+            var nearestValue = Infinity;
             Object.values(parent.objects).forEach(object => {
                 var dx = object.getX(interpolator) - parent.castle.getX(interpolator);
                 var dy = object.getY(interpolator) - parent.castle.getY(interpolator);
-                if (dx * dx + dy * dy < 400 * 400 && object.isCompassVisible() && object != parent.castle) {
+                var dist = dx * dx + dy * dy;
+                if (!object.isOurs && dist < nearestValue && object.type != 'b' && object.isCompassVisible()) {
+                    nearestValue = dist;
+                }
+                if (dist < 400 * 400 && object.isCompassVisible() && object != parent.castle) {
                     if (object.isOurs) {
                         ctx.fillStyle = "rgb(47, 237, 51)";
                     }
@@ -286,6 +297,48 @@ class Sidebar {
         ctx.fillStyle = "black";
         ctx.fill();
         ctx.stroke();
+
+        this.drawSquaresReadout(ctx, parent.castle ? 1 - (parent.health / 3) : 1, 18, 945);
+        this.drawSquaresReadout(ctx, 0.5, 54, 945);
+        this.drawSquaresReadout(ctx, 1 - clamp(0, nearestValue / (800 * 800), 1), 90, 945)
+        for (var i = 0; i < 33; i++) {
+            if (i < 9) {
+                ctx.fillStyle = "red";
+            }
+            else if (i < 19) {
+                ctx.fillStyle = "#F3BB38";
+            }
+            else if (i < 29) {
+                ctx.fillStyle = "#2FED33";
+            }
+            else {
+                ctx.fillStyle = "white";
+            }
+            ctx.fillRect(42, 945 + i * 6, 4, 2);
+            ctx.fillRect(78, 945 + i * 6, 4, 2);
+        }
+        ctx.fillStyle = "red";
+        ctx.fillRect(18, 999, 88, 2);
+    }
+
+    drawSquaresReadout(ctx, valueOf, rootX, rootY) {
+        valueOf = clamp(0, valueOf, 1);
+        valueOf = 1 - valueOf;
+        valueOf *= 33;
+        for (var i = 0; i < 33; i++) {
+            if (i >= valueOf) {
+                if (i < 9) {
+                    ctx.fillStyle = "red";
+                }
+                else {
+                    ctx.fillStyle = "#B8B8B8";
+                }
+            }
+            else {
+                ctx.fillStyle = "#222";
+            }
+            ctx.fillRect(rootX, rootY + i * 6, 16, 2);
+        }
     }
 }
 
@@ -443,7 +496,7 @@ class GameObject {
 
     interact(game) {
         this.isOurs = game.mine.indexOf(this.id) != -1;
-        if (!game.status.moveShips) {
+        if (!game.status.moveShips && !game.status.isRTF) {
             this.editState = 0;
         }
         if (this.editState == 1) {
@@ -458,7 +511,7 @@ class GameObject {
     }
 
     click(game) { // called on EVERY CLICK, not just clicks where it's hovered
-        if (!game.status.moveShips) {
+        if (!game.status.moveShips && !game.status.isRTF) {
             return;
         }
         if (this.editState == 1) {
@@ -477,7 +530,7 @@ class GameObject {
     }
 
     isCompassVisible() { // Can it be seen on a compass?
-        const hidden = ["s", "b"]; // List of types that can't be displayed on minimap/compass
+        const hidden = ["s", "b", "C", "w"]; // List of types that can't be displayed on minimap/compass
         var isSniper = this.upgrades.indexOf("s")!= -1;
         return this.isOurs || (hidden.indexOf(this.type) == -1 && !isSniper);
     }
@@ -624,6 +677,12 @@ class Game {
             
         }
         else if (command == "d") {
+            if (this.castle && args[0] == this.castle.id) {
+                delete this.castle;
+                this.status.isRTF = false;
+                this.status.spectating = true;
+                this.mine = [];
+            }
             delete this.objects[args[0]];
         }
         else if (command == "n") {
@@ -738,13 +797,25 @@ class Game {
         this.ctx.restore();
     }
 
+    cantPlace() { // COSMETIC: this is meant for user displays, NOT for logic.
+        if (!this.status.hasPlacedCastle && this.status.mouseWithinWideField) { // if it isn't 
+            return true;
+        }
+        return false;
+    }
+
     drawStatus() {
         this.ctx.fillStyle = "#555555";
         this.ctx.font = "12px 'Chakra Petch'";
         this.ctx.textAlign = "left";
         this.ctx.fillText("SYSTEM STATUS", 18, 9 + 15.6 / 2);
+        this.ctx.textAlign = "right";
+        this.ctx.fillText("SCORE", window.innerWidth - 18, 9 + 15.6 / 2);
         this.ctx.font = "16px 'Chakra Petch'";
+        this.ctx.fillStyle = "#CBCAFF";
+        this.ctx.fillText(this.status.score, window.innerWidth - 18, 28 + 6 + 21 / 2);
         this.ctx.fillStyle = "white";
+        this.ctx.textAlign = "left";
         var word = this.status.getTableBite();
         var width = this.ctx.measureText(word).width;
         this.ctx.fillRect(18, 28, width, 21);
@@ -756,6 +827,11 @@ class Game {
         width += 13 + this.ctx.measureText(word).width;
         this.ctx.fillStyle = "#CBCAFF";
         this.ctx.fillText(this.status.getTimeString(), 18 + width + 17, 28 + 6 + 21 / 2);
+        if (this.cantPlace()) {
+            this.ctx.fillStyle = "red";
+            this.ctx.textAlign = "center";
+            this.ctx.fillText("[ CAN'T PLACE HERE ]", window.innerWidth/2, 18);
+        }
     }
 
     renderUI(interpolator) {
@@ -822,7 +898,8 @@ class Game {
     interactionLoop() { // Is called as much as possible; handles interaction with the user
         this.doMouse();
         Object.values(this.objects).forEach((item) => {
-            item.isHovered = this.gameX > item.x - 5 && this.gameX < item.x + 5 && this.gameY > item.y - 5 && this.gameY < item.y + 5;
+            item.isHovered = (this.gameX > item.x         - 5 && this.gameX < item.x         + 5 && this.gameY > item.y         - 5 && this.gameY < item.y         + 5) ||
+                             (this.gameX > item.goalPos.x - 5 && this.gameX < item.goalPos.x + 5 && this.gameY > item.goalPos.y - 5 && this.gameY < item.goalPos.y + 5);
             item.interact(this);
         });
 
@@ -905,7 +982,7 @@ class Game {
             }
             else if (!this.status.mouseWithinWideField){
                 this.place("c");
-                this.hasPlacedCastle = true;
+                this.status.hasPlacedCastle = true;
             }
         }
     }
@@ -940,7 +1017,17 @@ function play() {
     var started = false;
     screen("establishin");
     var ws_url = document.getElementById("server-url").value;
-    var socket = new WebSocket(ws_url);
+    var socket = undefined;
+    try {
+        socket = new WebSocket(ws_url);
+    }
+    catch {
+        screen("failedToConnect");
+        setTimeout(() => {
+            screen("startscreen")
+        }, 1000);
+        return;
+    }
     game = new Game(socket);
     var form = new FormData(document.getElementById("startform"));
     socket.onopen = () => {
@@ -950,9 +1037,7 @@ function play() {
             game.scroll(evt.deltaX, evt.deltaY);
             evt.preventDefault();
             return false;
-        },
-        {passive:false}
-        );
+        }, {passive:false});
 
         window.addEventListener("scroll", (evt) => {
             evt.preventDefault();
