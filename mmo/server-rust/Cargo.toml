@@ -14,3 +14,9 @@ tracing-mutex = "*"
 serde_json = "*"
 serde = { version = "*", features = ["derive"] }
 futures = "*"
+
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level = 3

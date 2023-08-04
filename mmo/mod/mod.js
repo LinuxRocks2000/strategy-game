@@ -1,3 +1,6 @@
+const DEBUG = false;
+const INTERPOLATE = true;
+
 function clamp(min, val, max) {
     if (val < min) {
         val = min;
@@ -116,7 +119,14 @@ class Protocol extends EventTarget {
     }
 
     rtf(thrust, left, right, brake, shoot) {
-        this.send("R", [thrust, left, right, brake, shoot]);
+        if (thrust || left || right || brake || shoot) { // don't ever send an empty R frame, that's stupid
+            thrust = thrust ? "1" : "0";
+            left   = left   ? "1" : "0";
+            right  = right  ? "1" : "0";
+            brake  = brake  ? "1" : "0";
+            shoot  = shoot  ? "1" : "0";
+            this.send("R", [thrust, left, right, brake, shoot]);
+        }
     }
 
     talk(message) { // This function will see significant changes as I actually implement chatroom!
@@ -307,6 +317,7 @@ class GameObject {
         this.isOurs = false;
         this.isHovered = false;
         this.editState = 0; // 0 = none; 1 = picked up, moving; 2 = picked up, setting angle
+        this.didMove = true; // whether or not it's moved since last tick
     }
 
     interpolate(value, property) {
@@ -356,17 +367,23 @@ class GameObject {
             ctx.fillStyle = "yellow";
         }
         ctx.textAlign = "left";
-        ctx.fillText(this.type + "#" + this.id + " " + this.banner + "(" + master.banners[this.banner] + ")", -50, -h/2 - 10);
+        if (DEBUG) {
+            ctx.fillText(this.type + "#" + this.id + " " + this.banner + "(" + master.banners[this.banner] + ")", -50, -h / 2 - 10);
+        }
         ctx.translate(-x, -y);
-        ctx.strokeStyle = "green";
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(this.x, this.y);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = "blue";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(this.box[0], this.box[1], this.box[2] - this.box[0], this.box[3] - this.box[1]);
+        if (DEBUG) {
+            ctx.strokeStyle = "green";
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(this.x, this.y);
+            ctx.stroke();
+        }
+        if (DEBUG) {
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = "blue";
+            ctx.lineWidth = 1;
+            ctx.strokeRect(this.box[0], this.box[1], this.box[2] - this.box[0], this.box[3] - this.box[1]);
+        }
         if (this.isOurs && this.isEditable) {
             ctx.strokeStyle = "green";
             ctx.fillStyle = "green";
@@ -390,11 +407,14 @@ class GameObject {
         if (this.isChanged()) {
             this.box = this.bbox();
         }
-        this.xOld = this.x;
-        this.yOld = this.y;
-        this.wOld = this.w;
-        this.hOld = this.h;
-        this.aOld = this.a;
+        if (!this.didMove) {
+            this.xOld = this.x;
+            this.yOld = this.y;
+            this.wOld = this.w;
+            this.hOld = this.h;
+            this.aOld = this.a;
+        }
+        this.didMove = false;
         if (this.goalPos.hasChanged) {
             this.goalPos.hasChanged = false;
             game.comms.move(this.id, this.goalPos.x, this.goalPos.y, this.goalPos.a);
@@ -514,6 +534,7 @@ class Game {
             canPlaceObject: false, // if the mouse is close to the home castle with 400 tolerance
             mouseWithinNarrowField: false, // if the mouse is close to any game object with 400 tolerance
             mouseWithinWideField: false, // if the mouse is close to any game object with 600 tolerance
+            isRTF: false,
             getTableBite() { // Don't ask
                 return this.online ? (this.spectating ? "SPECTATING" : "ONLINE") : "OFFLINE";
             },
@@ -560,9 +581,10 @@ class Game {
         };
     }
 
-    attemptWall() {
+    attemptWall(x, y) {
         if (this.status.canPlaceObject && this.status.wallsRemaining > 0) {
-
+            this.place("w");
+            this.status.wallsRemaining--;
         }
     }
 
@@ -608,10 +630,18 @@ class Game {
             this.objects[args[1]] = new GameObject(args[2] - 0, args[3] - 0, args[7] - 0, args[8] - 0, args[4] - 0, args[0], args[5] == "1", args[1], args[6] - 0);
             if ((args[0] == "c" || args[0] == "R") && this.mine.indexOf(args[1]) != -1) {
                 this.castle = this.objects[args[1]];
+                if (args[0] == "R") {
+                    this.status.isRTF = true;
+                }
             }
         }
         else if (command == "M") {
             var obj = this.objects[args[0]];
+            obj.xOld = obj.x;
+            obj.yOld = obj.y;
+            obj.wOld = obj.w;
+            obj.hOld = obj.h;
+            obj.aOld = obj.a;
             obj.x = args[1] - 0;
             obj.y = args[2] - 0;
             if (args.length > 3) {
@@ -621,6 +651,7 @@ class Game {
                 obj.w = args[4] - 0;
                 obj.h = args[5] - 0;
             }
+            obj.didMove = true;
         }
         else if (command == "w") {
             if (args[0] == 0) {
@@ -662,7 +693,11 @@ class Game {
             console.log(args);
         }
         if (command == "t" || command == "!") {
+            var oldStatus = this.status.moveShips;
             this.status.moveShips = args[1] == '1';
+            if (this.status.moveShips && !oldStatus) {
+                this.enterMoveShips();
+            }
             var curTime = window.performance.now();
             var gTickTime = curTime - this.status.lastTickTime;
             const drag = 0.99;
@@ -747,6 +782,13 @@ class Game {
     renderLoop() { // Is called as much as possible; draws things and does smooth rendering
         this.ctx.fillStyle = "lightcoral";
         var interpolator = (window.performance.now() - this.status.lastTickTime) / this.status.tickTime;
+        if (!INTERPOLATE) {
+            interpolator = 1; // not 0, because then it'd be a frame behind at all times
+        }
+        if (this.status.isRTF && !this.status.moveShips) {
+            this.cX = this.castle.getX(interpolator);
+            this.cY = this.castle.getY(interpolator);
+        }
         this.ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
         this.renderGameboard(interpolator);
         this.renderUI(interpolator);
@@ -773,7 +815,7 @@ class Game {
         this.status.mouseWithinNarrowField = this.mouseFieldCheck(400);
         this.status.mouseWithinWideField = this.mouseFieldCheck(600);
         if (this.castle) {
-            this.status.canPlaceObject = this.mouseFieldCheckOnOne(400, this.castle);
+            this.status.canPlaceObject = this.mouseFieldCheckOnOne(400, this.castle) && this.status.moveShips; // you can only place stuff during strat mode
         }
     }
 
@@ -788,24 +830,28 @@ class Game {
         this.controls.down = this.keysDown["ArrowDown"] || this.keysDown["s"];
         this.controls.left = this.keysDown["ArrowLeft"] || this.keysDown["a"];
         this.controls.right = this.keysDown["ArrowRight"] || this.keysDown["d"];
-        if (this.controls.up) {
-            this.cY -= 20;
-        }
-        else if (this.controls.down) {
-            this.cY += 20;
-        }
-        if (this.controls.left) {
-            this.cX -= 20;
-        }
-        else if (this.controls.right) {
-            this.cX += 20;
+        if (!this.status.isRTF || this.status.moveShips) {
+            if (this.controls.up) {
+                this.cY -= 20;
+            }
+            else if (this.controls.down) {
+                this.cY += 20;
+            }
+            if (this.controls.left) {
+                this.cX -= 20;
+            }
+            else if (this.controls.right) {
+                this.cX += 20;
+            }
         }
         this.cX = clamp(0, this.cX, this.gamesize);
         this.cY = clamp(0, this.cY, this.gamesize);
     }
 
     talk() { // Call every server tick; sends things to the server
-
+        if (this.status.isRTF && !this.status.moveShips) {
+            this.comms.rtf(this.controls.up, this.controls.left, this.controls.right, this.controls.down, this.keysDown[" "]);
+        }
     }
 
     tick() { // Runs every server tick
@@ -867,6 +913,10 @@ class Game {
     kill() {
         this.harikari = true;
     }
+
+    enterMoveShips() {
+        this.status.wallsRemaining = this.status.wallsTurn;
+    }
 }
 
 
@@ -923,6 +973,9 @@ function play() {
 
         window.addEventListener("keydown", (evt) => {
             game.keysDown[evt.key] = true;
+            if (evt.key == "q") {
+                game.attemptWall(game.mouseX, game.mouseY);
+            }
         });
         
         window.addEventListener("keyup", (evt) => {

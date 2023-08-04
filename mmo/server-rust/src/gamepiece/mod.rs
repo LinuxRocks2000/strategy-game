@@ -446,6 +446,7 @@ impl GamePiece for Castle {
             thing.shooter_properties.counter = 15;
             thing.shooter_properties.shoot = true;
             thing.shooter_properties.angles[0] = -PI/2.0;
+            thing.shooter_properties.suppress = true;
             thing.speed_cap = 20.0;
         }
         thing

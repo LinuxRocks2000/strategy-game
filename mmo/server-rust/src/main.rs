@@ -26,11 +26,9 @@ use crate::gamepiece::fighters::*;
 use crate::gamepiece::misc::*;
 use crate::gamepiece::npc;
 use crate::config::Config;
-use futures::{
-    future::FutureExt, // for `.fuse()`
-    select,
-};
-
+use tokio::time::Instant;
+use futures::future::FutureExt; // for `.fuse()`
+use tokio::select;
 
 const FPS : f32 = 30.0;
 
@@ -451,7 +449,6 @@ impl Server {
             else {
                 self.flip();
             }
-            self.broadcast_tx.send(ClientCommand::Tick (self.counter, (if self.mode == GameMode::Strategy { "1" } else { "0" }).to_string())).expect("Broadcast failed");
             if self.isnt_rtf == 0 {
                 self.set_mode(GameMode::Play);
             }
@@ -496,6 +493,7 @@ impl Server {
                 self.place_random_rubble().await;
             }
         }
+        self.broadcast_tx.send(ClientCommand::Tick (self.counter, (if self.mode == GameMode::Strategy { "1" } else { "0" }).to_string())).expect("Broadcast failed");
     }
 
     fn set_mode(&mut self, mode : GameMode) {
@@ -775,7 +773,7 @@ impl Client {
         match self.tx.send(Message::text(text)).await {
             Ok(_) => {}
             Err(_) => {
-                println!("COULD NOT SEND A MESSAGE? This may be a borked pipe or summat'.");
+                println!("COULD NOT SEND A MESSAGE? This may be a borked pipe or summat'. Probably not fatal.");
             }
         }
     }
@@ -1022,6 +1020,7 @@ impl Client {
                         castle.physics.velocity *= resistance;
                         castle.physics.angle_v += angle_thrust;
                         castle.physics.angle_v *= 0.9;
+                        castle.physics.angle_v *= resistance;
                     }
                 },
                 'T' => { // Talk
@@ -1104,12 +1103,9 @@ async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>, broadcas
     let mut receiver = broadcaster.subscribe();
     let (tx, mut rx) = websocket.split();
     let mut moi = Client::new(tx, commandset);
-    let serverlock = server.lock().await; // HEY, YOU! IF YOU'RE THINKING OF MAKING THIS MUTABLE, THINK AGAIN
-    // I know making this mutable is the kind of dumb thing you would do. But just SET UP MESSAGE PASSING MORE.
-    if serverlock.passwordless {
+    if server.lock().await.passwordless {
         moi.send_singlet('p').await;
     }
-    drop(serverlock);
     'cliloop: loop {
         select! {
             insult = rx.next().fuse() => {
@@ -1124,7 +1120,7 @@ async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>, broadcas
                                 break 'cliloop;
                             }
                         };
-                        if msg.is_text(){ // THE DEADLOCK IS IN HERE SOMEWHERE
+                        if msg.is_text(){
                             let text = match msg.to_str() {
                                 Ok(text) => text,
                                 Err(()) => ""
@@ -1138,8 +1134,7 @@ async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>, broadcas
                             else {
                                 let p = ProtocolMessage::parse_string(text.to_string());
                                 if p.is_some() {
-                                    moi.handle(p.unwrap() /* If it made it this far, there's data to unwrap */, serverlock).await; // IT'S IN HERE SOMEWHERE
-                                    // Deadlock condition found. An unlocked server will run mainloop *while this is called*, and because this (fails to) lock the server it can never exit. This means the client mutex is never unlocked.
+                                    moi.handle(p.unwrap() /* If it made it this far, there's data to unwrap */, serverlock).await;
                                 }
                             }
                         }
@@ -1286,7 +1281,7 @@ async fn main(){
     let args: Vec<String> = std::env::args().collect();
     use tokio::sync::mpsc::error::TryRecvError;
     let mut rng = rand::thread_rng();
-    let (broadcast_tx, _rx) = tokio::sync::broadcast::channel(128); // Give _rx a name because we want it to live to the end of this function
+    let (broadcast_tx, _rx) = tokio::sync::broadcast::channel(16); // Give _rx a name because we want it to live to the end of this function; if it doesn't, the tx will be invalidated. or something.
     let mut server = Server {
         mode                : GameMode::Waiting,
         password            : "".to_string(),
@@ -1326,7 +1321,9 @@ async fn main(){
         loop {
             interval.tick().await;
             let mut lawk = server_mutex_loopah.lock().await; // Tracking le deadlock: It *always*, invariably, hangs here. It never makes it inside the mainloop. Thus the problem cannot be directly related to the mainloop.
+            //let start = Instant::now();
             lawk.mainloop().await;
+            //println!("Mainloop took {:?}", start.elapsed());
             match commandget.try_recv() {
                 Ok (ServerCommand::Start) => {
                     lawk.start().await;

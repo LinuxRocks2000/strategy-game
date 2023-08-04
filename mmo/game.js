@@ -1049,6 +1049,11 @@ connection.onmessage = (message) => {
     else if (command == "M"){
         var obj = objects[args[0] - 0];
         if (obj) {
+            /*obj.o_x = obj.g_x;
+            obj.o_y = obj.g_y;
+            obj.o_angle = obj.g_angle;
+            obj.o_w = obj.g_w;
+            obj.o_h = obj.g_h;*/
             obj.o_x = obj.g_x;
             obj.o_y = obj.g_y;
             obj.o_angle = obj.g_angle;
