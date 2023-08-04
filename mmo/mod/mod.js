@@ -1044,7 +1044,5 @@ function guessWS() {
     Gonna try to avoid that!
 */
 
-document.getElementById("server-url").value = "ws://localhost:3000/game";
-
 randomizeBanner();
 screen("startscreen");
