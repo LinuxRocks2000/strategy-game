@@ -15,14 +15,16 @@ pub struct ShooterProperties {
     counter       : u32,
     angles        : Vec<f32>,
     range         : i32,
-    pub suppress  : bool // It can't shoot if this is on, but it can count down.
+    pub suppress  : bool, // It can't shoot if this is on, but it can count down.
+    bullet_type   : BulletType
 }
 
 
 pub enum TargetingFilter {
     Any,
     Fighters,
-    Castles
+    Castles,
+    RealTimeFighter
 }
 
 
@@ -30,6 +32,13 @@ pub enum TargetingFilter {
 pub enum TargetingMode {
     None,
     Nearest
+}
+
+
+#[derive(Clone, Copy)]
+pub enum BulletType {
+    Bullet,
+    AntiRTF
 }
 
 
@@ -139,10 +148,11 @@ impl GamePieceBase {
             shoot_timer : 20,
             shooter_properties : ShooterProperties {
                 shoot : false,
-                counter : 2000000,
+                counter : 0,
                 angles : vec![0.0],
                 range : 30,
-                suppress : false
+                suppress : false,
+                bullet_type : BulletType::Bullet
             },
             ttl : -1,
             targeting : Targeting {
@@ -202,6 +212,9 @@ impl GamePieceBase {
                                 'R' | 'c' => true,
                                 _ => false
                             }
+                        },
+                        TargetingFilter::RealTimeFighter => {
+                            object.identify() == 'R'
                         }
                     };
                     if viable {
@@ -297,7 +310,7 @@ impl GamePieceBase {
         if self.shoot_timer == 0 {
             self.shoot_timer = self.shooter_properties.counter;
             for angle in &self.shooter_properties.angles {
-                server.shoot(self.physics.extend_point(50.0, *angle), Vector2::new_from_manda(20.0, self.physics.angle() + *angle) + self.physics.velocity, range, None).await
+                server.shoot(self.shooter_properties.bullet_type, self.physics.extend_point(50.0, *angle), Vector2::new_from_manda(20.0, self.physics.angle() + *angle) + self.physics.velocity, range, None).await
                 .lock().await.set_banner(self.banner); // Set the banner
             }
         }

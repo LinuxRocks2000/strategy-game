@@ -105,6 +105,7 @@ function prerenderBackground(size) {
     var tick = 0;
 
     function main(x, y) {
+        gl.viewport(0, 0, window.innerWidth, window.innerHeight);
         var leWidth = window.innerWidth;
         var leHeight = window.innerHeight;
         if (diva) {

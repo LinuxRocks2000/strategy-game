@@ -8,11 +8,16 @@ use super::TargetingMode;
 use super::ExplosionMode;
 use crate::ProtocolMessage;
 use crate::vector::Vector2;
+use super::BulletType;
+use crate::functions::*;
+use std::f32::consts::PI;
 
 pub struct Bullet {}
+pub struct AntiRTFBullet {}
 pub struct Wall {}
 pub struct Chest {}
 pub struct Turret {}
+pub struct MissileLaunchingSystem {}
 pub struct Radiation {
     halflife : f32,
     strength : f32,
@@ -25,6 +30,14 @@ pub struct Block {}
 
 
 impl Bullet {
+    pub fn new() -> Self {
+        Self {
+
+        }
+    }
+}
+
+impl AntiRTFBullet {
     pub fn new() -> Self {
         Self {
 
@@ -45,6 +58,12 @@ impl Chest {
 }
 
 impl Turret {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl MissileLaunchingSystem {
     pub fn new() -> Self {
         Self {}
     }
@@ -90,6 +109,41 @@ impl GamePiece for Bullet {
     fn identify(&self) -> char {
         'b'
     }
+}
+
+impl GamePiece for AntiRTFBullet {
+    fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
+        thing.targeting.mode = TargetingMode::Nearest;
+        thing.targeting.filter = TargetingFilter::RealTimeFighter;
+        thing.targeting.range = (0.0, 1000.0);
+        thing.max_health = 2.0;
+        thing.collision_info.damage = 5.0;
+        thing
+    }
+
+    fn obtain_physics(&self) -> PhysicsObject {
+        PhysicsObject::new(0.0, 0.0, 30.0, 10.0, 0.0)
+    }
+
+    fn identify(&self) -> char {
+        'a'
+    }
+    
+    fn update(&mut self, master : &mut GamePieceBase, _server : &mut Server) {
+        match master.targeting.vector_to {
+            Some(vector_to) => {
+                let goalangle = vector_to.angle();
+                master.physics.change_angle(loopize(goalangle, master.physics.angle()) * 0.2);
+                master.physics.thrust(1.0);
+                if (master.physics.velocity.angle() - goalangle).abs() > PI/4.0 {
+                    master.physics.velocity = master.physics.velocity * 0.95;
+                }
+            },
+            None => {}
+        }
+    }
+
+
 }
 
 impl GamePiece for Wall {
@@ -160,6 +214,44 @@ impl GamePiece for Turret {
                 master.physics.set_angle(vector.angle());
             },
             None => {}
+        };
+    }
+
+    fn cost(&self) -> u32 {
+        100
+    }
+}
+
+impl GamePiece for MissileLaunchingSystem {
+    fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
+        thing.targeting.mode = TargetingMode::Nearest;
+        thing.targeting.filter = TargetingFilter::RealTimeFighter;
+        thing.targeting.range = (0.0, 1000.0);
+        thing.shooter_properties.shoot = true;
+        thing.shooter_properties.bullet_type = BulletType::AntiRTF;
+        thing.shooter_properties.counter = 150;
+        thing.shooter_properties.range = 1000;
+        thing.collision_info.damage = 5.0;
+        thing
+    }
+
+    fn identify(&self) -> char {
+        'm'
+    }
+
+    fn obtain_physics(&self) -> PhysicsObject {
+        PhysicsObject::new(0.0, 0.0, 48.0, 22.0, 0.0)
+    }
+
+    fn update(&mut self, master : &mut GamePieceBase, _server : &mut Server) {
+        match master.targeting.vector_to {
+            Some(vector) => {
+                master.physics.set_angle(vector.angle());
+                master.shooter_properties.suppress = false;
+            },
+            None => {
+                master.shooter_properties.suppress = true; // don't fire when there isn't a target, these guys are supposed to be more convenient than regular turrets
+            }
         };
     }
 

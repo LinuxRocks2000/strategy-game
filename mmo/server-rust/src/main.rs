@@ -29,6 +29,7 @@ use crate::config::Config;
 use tokio::time::Instant;
 use futures::future::FutureExt; // for `.fuse()`
 use tokio::select;
+use crate::gamepiece::BulletType;
 
 const FPS : f32 = 30.0;
 
@@ -179,6 +180,10 @@ impl Server {
         self.place(Arc::new(Mutex::new(Turret::new())), x, y, a, sender).await
     }
 
+    async fn place_mls(&mut self, x : f32, y : f32, a : f32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
+        self.place(Arc::new(Mutex::new(MissileLaunchingSystem::new())), x, y, a, sender).await
+    }
+
     async fn place_radiation(&mut self, x : f32, y : f32, size : f32, halflife : f32, strength : f32, a : f32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
         self.place(Arc::new(Mutex::new(Radiation::new(halflife, strength, size, size))), x, y, a, sender).await
     }
@@ -257,8 +262,11 @@ impl Server {
         self.place_random_npc().await;
     }
 
-    pub async fn shoot(&mut self, position : Vector2, velocity : Vector2, range : i32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
-        let bullet = self.place(Arc::new(Mutex::new(Bullet::new())), position.x, position.y, 0.0, sender).await;
+    pub async fn shoot(&mut self, bullet_type : BulletType, position : Vector2, velocity : Vector2, range : i32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
+        let bullet = self.place(match bullet_type {
+            BulletType::Bullet => Arc::new(Mutex::new(Bullet::new())),
+            BulletType::AntiRTF => Arc::new(Mutex::new(AntiRTFBullet::new()))
+        }, position.x, position.y, velocity.angle(), sender).await;
         let mut lock = bullet.lock().await;
         lock.physics.velocity = velocity;
         lock.ttl = range;
@@ -484,16 +492,16 @@ impl Server {
                     }
                 }
             }
-        }
-        if self.mode == GameMode::Play {
-            self.deal_with_objects().await;
-            self.place_timer -= 1;
-            if self.place_timer <= 0 {
-                self.place_timer = self.random.lock().await.next() % 200 + 50;
-                self.place_random_rubble().await;
+            if self.mode == GameMode::Play {
+                self.deal_with_objects().await;
+                self.place_timer -= 1;
+                if self.place_timer <= 0 {
+                    self.place_timer = self.random.lock().await.next() % 200 + 50;
+                    self.place_random_rubble().await;
+                }
             }
+            self.broadcast_tx.send(ClientCommand::Tick (self.counter, (if self.mode == GameMode::Strategy { "1" } else { "0" }).to_string())).expect("Broadcast failed");
         }
-        self.broadcast_tx.send(ClientCommand::Tick (self.counter, (if self.mode == GameMode::Strategy { "1" } else { "0" }).to_string())).expect("Broadcast failed");
     }
 
     fn set_mode(&mut self, mode : GameMode) {
@@ -882,7 +890,7 @@ impl Client {
                                                 server.place_basic_fighter(x + 200.0, y, 0.0, Some(self)).await;
                                                 server.place_basic_fighter(x, y - 200.0, 0.0, Some(self)).await;
                                                 server.place_basic_fighter(x, y + 200.0, 0.0, Some(self)).await;
-                                                self.collect(100).await;
+                                                self.collect(10000).await;
                                             },
                                             ClientMode::RealTimeFighter => {
                                                 server.place_basic_fighter(x - 100.0, y, PI, Some(self)).await;
@@ -932,6 +940,9 @@ impl Client {
                                         self.m_castle.as_mut().unwrap().lock().await.add_fort(fort);
                                     }
                                 },
+                                "m" => {
+                                    server.place_mls(x, y, 0.0, Some(self)).await;
+                                }
                                 &_ => {
                                     message.poison("INVALID PLACE TYPE");
                                 }

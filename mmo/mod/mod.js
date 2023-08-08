@@ -173,10 +173,63 @@ class Sidebar {
         this.dumpass.lineTo(258, 1129);
         this.dumpass.quadraticCurveTo(266, 1129, 266, 1121);
         this.dumpass.lineTo(266, 910);
+        this.isInventory = false;
+        this.scrollHeight = 1144;
+    }
+
+    drawInventory(parent) {
+        const curveRadius = 24;
+        const inventoryObjectHeight = 75;
+        var ctx = parent.ctx;
+        var inventoryTotalHeight = Math.max(parent.inventory.length * inventoryObjectHeight + 57, window.innerHeight - 56);
+        this.scrollHeight = inventoryTotalHeight;
+        ctx.beginPath();
+        ctx.fillStyle = "black";
+        ctx.moveTo(0, 56);
+        ctx.lineTo(266 + curveRadius, 56);
+        ctx.quadraticCurveTo(266, 56, 266, 56 + curveRadius);
+        ctx.lineTo(266, inventoryTotalHeight - curveRadius);
+        ctx.quadraticCurveTo(266, inventoryTotalHeight, 266 + curveRadius, inventoryTotalHeight);
+        ctx.lineTo(0, inventoryTotalHeight);
+        ctx.closePath();
+        ctx.fill();
+        parent.inventory.forEach((item, i) => {
+            var rootY = 57 + i * inventoryObjectHeight;
+            if (item.selected) {
+                ctx.fillStyle = "#440000";
+                ctx.fillRect(0, rootY, 266, inventoryObjectHeight);
+            }
+            ctx.font = "14px 'Chakra Petch'";
+            ctx.fillStyle = "white";
+            ctx.textAlign = "left";
+            ctx.fillText(item.name, 30, rootY + 14);
+            ctx.fillStyle = "white";
+            var width = ctx.measureText(item.cost + "").width;
+            ctx.fillRect(246 - width, rootY, width, 18);
+            ctx.fillStyle = "black";
+            ctx.fillText(item.cost, 246 - width, rootY + 14);
+            ctx.fillStyle = "blue";
+            ctx.font = "10px 'Chakra Petch'";
+            ctx.fillText(item.descriptionL1, 20, rootY + 40);
+            ctx.fillText(item.descriptionL2, 20, rootY + 50);
+            item.hovered = false;
+            if (parent.status.score >= item.cost && item.stack != 0) {
+                if (parent.mouseX < 266 && parent.mouseY + parent.sideScroll > rootY && parent.mouseY + parent.sideScroll < rootY + inventoryObjectHeight) {
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = "white";
+                    ctx.strokeRect(0, rootY, 266, inventoryObjectHeight);
+                    item.hovered = true;
+                }
+            }
+        });
     }
 
     draw(parent, interpolator) {
         var ctx = parent.ctx;
+        if (this.isInventory) {
+            this.drawInventory(parent);
+            return;
+        }
         ctx.fillStyle = "black";
         ctx.fill(this.path);
         ctx.beginPath();
@@ -319,6 +372,7 @@ class Sidebar {
         }
         ctx.fillStyle = "red";
         ctx.fillRect(18, 999, 88, 2);
+        this.scrollHeight = 1144;
     }
 
     drawSquaresReadout(ctx, valueOf, rootX, rootY) {
@@ -339,6 +393,40 @@ class Sidebar {
             }
             ctx.fillRect(rootX, rootY + i * 6, 16, 2);
         }
+    }
+
+    clickies(parent) {
+        this.inventorySelected = undefined;
+        parent.inventory.forEach(item => {
+            if (item.hovered) {
+                if (item.selected) {
+                    item.selected = false;
+                }
+                else {
+                    if (item.place.word) { // it's an object to place
+                        this.inventorySelected = item;
+                        item.selected = true;
+                    }
+                    else {
+                        if (item.stack) {
+                            item.stack--;
+                        }
+                        parent.comms.cost(item.cost);
+                    }
+                    if (item.place.cbk) {
+                        item.place.cbk();
+                    }
+                    if (item.place.upgrade) {
+                        if (item.place.upgrade.effect == "castle") {
+                            parent.comms.upgrade(parent.castle.id, item.place.upgrade.word);
+                        }
+                    }
+                }
+            }
+            else {
+                item.selected = false;
+            }
+        });
     }
 }
 
@@ -410,6 +498,10 @@ class GameObject {
         ctx.translate(x, y);
         ctx.rotate(a);
         ctx.strokeRect(-w / 2, -h / 2, w, h);
+        if (this.type == "R") {
+            ctx.fillStyle = "white";
+            ctx.fillRect(-w / 2, -h / 2, w, 5);
+        }
         ctx.rotate(-a);
         ctx.font = "10px 'Chakra Petch'";
         if (this.isOurs) {
@@ -632,6 +724,91 @@ class Game {
             down: false,
             right: false
         };
+        this.inventory = [
+            {
+                name: "HYPERSONIC MISSILE",
+                cost: 5,
+                descriptionL1: "Very fast, very erratic missile that does",
+                descriptionL2: "damage by crashing into enemies; does not shoot.",
+                place: {
+                    word: "h"
+                }
+            },
+            {
+                name: "BASIC FIGHTER",
+                cost: 10,
+                descriptionL1: "Low motion speed, medium shot cooldown,",
+                descriptionL2: "medium bullet range, 2 health.",
+                place: {
+                    word: "f"
+                }
+            },
+            {
+                name: "TIE FIGHTER",
+                cost: 20,
+                descriptionL1: "Slightly faster double barreled basic fighter.",
+                descriptionL2: "Shoots out of back as well as front.",
+                place: {
+                    word: "t"
+                }
+            },
+            {
+                name: "SNIPER",
+                cost: 30,
+                descriptionL1: "Very fast low-profile cloaked fighter.",
+                descriptionL2: "High shot cooldown, very high shot range.",
+                place: {
+                    word: "s"
+                }
+            },
+            {
+                name: "+2 WALL",
+                cost: 30,
+                descriptionL1: "Place 2 extra walls around any castle or fort",
+                descriptionL2: "every turn.",
+                place: {
+                    cbk: () => {
+                        this.status.wallsTurn += 2;
+                    }
+                }
+            },
+            {
+                name: "TURRET",
+                cost: 100,
+                descriptionL1: "Stationary antiaircraft turret that swivels",
+                descriptionL2: "towards enemy craft. Medium shot cooldown.",
+                place: {
+                    word: "T"
+                }
+            },
+            {
+                name: "MISSILE LAUNCHING SYSTEM",
+                cost: 100,
+                descriptionL1: "Stationary antiaircraft turret that swivels towards",
+                descriptionL2: "enemy RTFs and fires heat-seaking missiles.",
+                place: {
+                    word: "m"
+                }
+            },
+            {
+                name: "FORT",
+                cost: 120,
+                descriptionL1: "Stationary, small low-profile fortress that you can place",
+                descriptionL2: "fighters near. Can be placed anywhere. Backup castle.",
+                place: {
+                    word: "F"
+                }
+            },
+            {
+                name: "NUKE",
+                cost: 300,
+                descriptionL1: "Very fast well-controlled missile with a",
+                descriptionL2: "high-yield nuclear warhead.",
+                place: {
+                    word: "n"
+                }
+            },
+        ];
     }
 
     attemptWall(x, y) {
@@ -660,6 +837,7 @@ class Game {
         }
         else if (command == "!") {
             this.status.countdown = args[0] - 0;
+            this.status.wait = true;
         }
         else if (command == "?") {
             this.status.isTeamLeader = true;
@@ -691,11 +869,69 @@ class Game {
                 this.castle = this.objects[args[1]];
                 if (args[0] == "R") {
                     this.status.isRTF = true;
+                    this.inventory = [
+                        {
+                            name: "FASTER GUN",
+                            cost: 30,
+                            stack: 1,
+                            descriptionL1: "Significantly decrease RTF main gun shot cooldown.",
+                            descriptionL2: "",
+                            place: {
+                                upgrade: {
+                                    effect: "castle",
+                                    cost: 30,
+                                    word: "b"
+                                }
+                            }
+                        },
+                        {
+                            name: "SNIPER",
+                            cost: 40,
+                            stack: 1,
+                            descriptionL1: "Make the RTF invisible on any scopes,",
+                            descriptionL2: "including local-area compass.",
+                            place: {
+                                upgrade: {
+                                    effect: "castle",
+                                    word: "s"
+                                }
+                            }
+                        },
+                        {
+                            name: "SPEEDSHIP",
+                            cost: 70,
+                            stack: 1,
+                            descriptionL1: "Significantly increase RTF flight speed.",
+                            descriptionL2: "",
+                            place: {
+                                upgrade: {
+                                    effect: "castle",
+                                    word: "f"
+                                }
+                            }
+                        },
+                        {
+                            name: "FAST HEAL",
+                            cost: 150,
+                            stack: 1,
+                            descriptionL1: "Significantly increase RTF repair speed.",
+                            descriptionL2: "",
+                            place: {
+                                upgrade: {
+                                    effect: "castle",
+                                    word: "h"
+                                }
+                            }
+                        },
+                    ];
                 }
             }
         }
         else if (command == "M") {
             var obj = this.objects[args[0]];
+            if (!obj) {
+                return;
+            }
             obj.xOld = obj.x;
             obj.yOld = obj.y;
             obj.wOld = obj.w;
@@ -758,6 +994,9 @@ class Game {
                 this.enterMoveShips();
             }
             var curTime = window.performance.now();
+            if (this.status.lastTickTime == -1) {
+                this.status.lastTickTime = curTime - this.status.tickTime;
+            }
             var gTickTime = curTime - this.status.lastTickTime;
             const drag = 0.99;
             this.status.tickTime = this.status.tickTime * drag + gTickTime * (1 - drag);
@@ -801,6 +1040,14 @@ class Game {
         if (!this.status.hasPlacedCastle && this.status.mouseWithinWideField) { // if it isn't 
             return true;
         }
+        if (this.sidebar.inventorySelected) {
+            if (this.sidebar.inventorySelected.place.word == "F" && !this.status.mouseWithinNarrowField) {
+                return false;
+            }
+            if (!this.status.canPlaceObject) {
+                return true;
+            }
+        }
         return false;
     }
 
@@ -836,6 +1083,7 @@ class Game {
 
     renderUI(interpolator) {
         this.ctx.translate(0, -this.sideScroll);
+        //this.sidebar.isInventory = this.keysDown["i"] || this.sidebar.inventorySelected;
         this.sidebar.draw(this, interpolator);
         this.ctx.translate(0, this.sideScroll);
         this.ctx.fillStyle = "black";
@@ -861,7 +1109,7 @@ class Game {
         if (!INTERPOLATE) {
             interpolator = 1; // not 0, because then it'd be a frame behind at all times
         }
-        if (this.status.isRTF && !this.status.moveShips) {
+        if (this.status.isRTF && !this.status.moveShips && !this.status.wait) {
             this.cX = this.castle.getX(interpolator);
             this.cY = this.castle.getY(interpolator);
         }
@@ -923,6 +1171,7 @@ class Game {
         }
         this.cX = clamp(0, this.cX, this.gamesize);
         this.cY = clamp(0, this.cY, this.gamesize);
+        this.sideScroll = clamp(0, this.sideScroll, this.sidebar.scrollHeight - window.innerHeight + 56)
     }
 
     talk() { // Call every server tick; sends things to the server
@@ -945,7 +1194,6 @@ class Game {
     scroll(dx, dy) {
         if (this.mouseX < 266) {
             this.sideScroll += dy + dx;
-            this.sideScroll = clamp(0, this.sideScroll, 1144 - window.innerHeight + 56)
         }
         else {
             this.cX += dx;
@@ -970,15 +1218,31 @@ class Game {
 
     mouseUp() {
         if (this.mouseX < 266) { // It's in the sidebar
-
+            this.sidebar.clickies(this);
         }
         else {
-            if (this.hasPlacedCastle) {
-                Object.values(this.objects).forEach(item => {
-                    if (item.isOurs) {
-                        item.click(this);
+            if (this.status.hasPlacedCastle) {
+                if (this.sidebar.inventorySelected && this.status.moveShips) {
+                    if (this.status.canPlaceObject || (this.sidebar.inventorySelected.place.word == "F" && !this.status.mouseWithinNarrowField)) {
+                        if (this.sidebar.inventorySelected.place.word) {
+                            this.place(this.sidebar.inventorySelected.place.word);
+                        }
+                        if (this.sidebar.inventorySelected.stack) {
+                            this.sidebar.inventorySelected.stack--;
+                        }
+                        this.sidebar.inventorySelected = undefined;
+                        this.inventory.forEach(item => {
+                            item.selected = false;
+                        });
                     }
-                });
+                }
+                else {
+                    Object.values(this.objects).forEach(item => {
+                        if (item.isOurs) {
+                            item.click(this);
+                        }
+                    });
+                }
             }
             else if (!this.status.mouseWithinWideField){
                 this.place("c");
@@ -1065,6 +1329,9 @@ function play() {
         
         window.addEventListener("keyup", (evt) => {
             game.keysDown[evt.key] = false;
+            if (evt.key == "i") {
+                game.sidebar.isInventory = !game.sidebar.isInventory;
+            }
         });
     };
     socket.onerror = () => {
