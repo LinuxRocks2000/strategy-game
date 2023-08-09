@@ -32,6 +32,15 @@ function todo(thing) {
 }
 
 
+function notify(notification) {
+    if (!document.hasFocus()) {
+        const notif = new Notification("MMOSG", {
+            body: notification
+        });
+    }
+}
+
+
 class ProtocolMessageReceivedEvent extends Event {
     constructor(command, args, initDict = undefined) {
         super("protocolmessagereceived", initDict);
@@ -666,6 +675,8 @@ class Game {
         }
         this.status = {
             spectating: false,
+            counting: false,
+            playing: false,
             online: false,
             moveShips: false,
             isTeamLeader: false,
@@ -844,10 +855,18 @@ class Game {
             this.tick();
             this.status.wait = false; // If it's receiving TICK commands it is not waiting
             this.status.counter = args[0] - 0;
+            if (!this.status.playing) {
+                this.status.playing = true;
+                notify("Game has started!")
+            }
         }
         else if (command == "!") {
             this.status.countdown = args[0] - 0;
             this.status.wait = true;
+            if (!this.status.counting) {
+                this.status.counting = true;
+                notify("Countdown started: Game will begin in " + this.status.getTimeString());
+            }
         }
         else if (command == "?") {
             this.status.isTeamLeader = true;
@@ -1407,4 +1426,16 @@ function guessWS() {
 */
 
 randomizeBanner();
-screen("startscreen");
+
+if (Notification.permission == "default") {
+    screen("allownotifs");
+}
+else {
+    screen("startscreen");
+}
+
+function allowNotifs() {
+    Notification.requestPermission().then(() => {
+        screen("startscreen");
+    });
+}

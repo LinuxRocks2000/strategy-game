@@ -190,3 +190,7 @@ input:checked + #speclabel::after {
     width: 100%;
     height: 100%;
 }
+
+#allownotifs {
+    text-align: center;
+}

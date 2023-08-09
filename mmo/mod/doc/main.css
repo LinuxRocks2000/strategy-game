@@ -210,3 +210,7 @@ table > thead {
 table > tbody {
     color: white;
 }
+
+#allownotifs {
+    text-align: center;
+}
