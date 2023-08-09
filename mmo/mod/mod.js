@@ -640,7 +640,7 @@ class Game {
             this.onmessage(evt.command, evt.args);
         });
         this.gamesize = 0;
-        this.zoomLevel = 0.05;
+        this.zoomLevel = 0.7;
         this.canvas = document.getElementById("game");
         this.ctx = this.canvas.getContext("2d");
         this.health = -1;
