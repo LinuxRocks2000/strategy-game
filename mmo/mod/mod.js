@@ -398,7 +398,7 @@ class Sidebar {
     clickies(parent) {
         this.inventorySelected = undefined;
         parent.inventory.forEach(item => {
-            if (item.hovered && parent.status.moveShips) {
+            if (item.hovered && (parent.status.moveShips || parent.status.isRTF)) {
                 if (item.selected) {
                     item.selected = false;
                 }
