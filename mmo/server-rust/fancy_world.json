@@ -2,6 +2,7 @@
     "password": null,
     "world_size": 10000,
     "io_mode": false,
+    "permit_npcs": false,
     "map": [
         {
             "x": 5000,

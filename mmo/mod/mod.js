@@ -1120,8 +1120,8 @@ class Game {
             interpolator = 1; // not 0, because then it'd be a frame behind at all times
         }
         if (this.status.isRTF && !this.status.moveShips && !this.status.wait) {
-            this.cX = this.castle.getX(interpolator);
-            this.cY = this.castle.getY(interpolator);
+            this.cX = this.castle.getX(interpolator) * this.zoomLevel;
+            this.cY = this.castle.getY(interpolator) * this.zoomLevel;
         }
         this.ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
         this.renderGameboard(interpolator, this.zoomLevel);
@@ -1149,7 +1149,7 @@ class Game {
         this.status.mouseWithinNarrowField = this.mouseFieldCheck(400);
         this.status.mouseWithinWideField = this.mouseFieldCheck(600);
         if (this.castle) {
-            this.status.canPlaceObject = this.mouseFieldCheckOnOne(400, this.castle) && this.status.moveShips; // you can only place stuff during strat mode
+            this.status.canPlaceObject = this.mouseFieldCheckOnOne(400, this.castle) && (this.status.moveShips || this.status.isRTF); // you can only place stuff during strat mode
         }
     }
 
@@ -1232,7 +1232,7 @@ class Game {
         }
         else {
             if (this.status.hasPlacedCastle) {
-                if (this.sidebar.inventorySelected && this.status.moveShips) {
+                if (this.sidebar.inventorySelected && (this.status.moveShips || this.status.isRTF)) {
                     if (this.status.canPlaceObject || (this.sidebar.inventorySelected.place.word == "F" && !this.status.mouseWithinNarrowField)) {
                         if (this.sidebar.inventorySelected.place.word) {
                             this.place(this.sidebar.inventorySelected.place.word);

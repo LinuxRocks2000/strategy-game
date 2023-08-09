@@ -26,7 +26,6 @@ use crate::gamepiece::fighters::*;
 use crate::gamepiece::misc::*;
 use crate::gamepiece::npc;
 use crate::config::Config;
-use tokio::time::Instant;
 use futures::future::FutureExt; // for `.fuse()`
 use tokio::select;
 use crate::gamepiece::BulletType;
@@ -108,7 +107,8 @@ pub struct Server {
     isnt_rtf          : u32,
     times             : (f32, f32),
     clients_connected : u32,
-    is_headless       : bool
+    is_headless       : bool,
+    permit_npcs       : bool
 }
 
 enum AuthState {
@@ -263,7 +263,9 @@ impl Server {
             }
         }
         self.place(thing, x, y, 0.0, None).await;
-        self.place_random_npc().await;
+        if self.permit_npcs {
+            self.place_random_npc().await;
+        }
     }
 
     pub async fn shoot(&mut self, bullet_type : BulletType, position : Vector2, velocity : Vector2, range : i32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
@@ -1328,7 +1330,8 @@ async fn main(){
         isnt_rtf            : 0,
         times               : (40.0, 20.0),
         clients_connected   : 0,
-        is_headless         : false
+        is_headless         : false,
+        permit_npcs         : true
     };
     //rx.close().await;
     server.load_config().await;

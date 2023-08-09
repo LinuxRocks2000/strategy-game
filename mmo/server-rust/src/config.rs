@@ -38,7 +38,8 @@ struct ServerConfigFile {
     teams           : Option<Vec<TeamDef>>,
     strat_secs      : Option<f32>,
     play_secs       : Option<f32>,
-    headless        : Option<bool>
+    headless        : Option<bool>,
+    permit_npcs     : Option<bool>
 }
 
 pub struct Config {
@@ -89,6 +90,9 @@ impl Config {
         }
         if self.json.io_mode.is_some() {
             server.is_io = self.json.io_mode.unwrap();
+        }
+        if self.json.permit_npcs.is_some() {
+            server.permit_npcs = self.json.permit_npcs.unwrap();
         }
         match &self.json.autonomous {
             Some(auto) => {
