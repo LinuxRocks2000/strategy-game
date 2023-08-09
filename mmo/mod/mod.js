@@ -398,7 +398,7 @@ class Sidebar {
     clickies(parent) {
         this.inventorySelected = undefined;
         parent.inventory.forEach(item => {
-            if (item.hovered) {
+            if (item.hovered && parent.status.moveShips) {
                 if (item.selected) {
                     item.selected = false;
                 }
@@ -1038,11 +1038,11 @@ class Game {
         this.ctx.lineWidth = 4;
         this.ctx.strokeRect(0, 0, this.gamesize * zoomLevel, this.gamesize * zoomLevel);
         //this.ctx.fillRect(0, 0, this.gamesize, this.gamesize);
-        this.ctx.fillStyle = "black";
-        this.ctx.fillRect(this.gameX * zoomLevel - 5, this.gameY * zoomLevel - 5, 10, 10);
         Object.values(this.objects).forEach((item) => {
             item.draw(this, interpolator, zoomLevel);
         });
+        this.ctx.fillStyle = "black";
+        this.ctx.fillRect(this.gameX * zoomLevel - 5, this.gameY * zoomLevel - 5, 10, 10);
         this.ctx.restore();
     }
 

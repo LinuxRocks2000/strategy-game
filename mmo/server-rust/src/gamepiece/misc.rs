@@ -149,7 +149,9 @@ impl GamePiece for AntiRTFBullet {
         }
     }
 
-
+    fn cost(&self) -> u32 {
+        7
+    }
 }
 
 impl GamePiece for Wall {

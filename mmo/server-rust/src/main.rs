@@ -339,8 +339,12 @@ impl Server {
                             else {
                                 x_lockah.physics.velocity.magnitude() / sum
                             };
-                            x_lockah.physics.shape.translate(intasectah.1 * ratio); // I have no clue if this is correct but it works well enough
-                            y_lockah.physics.shape.translate(intasectah.1 * -1.0 * (1.0 - ratio));
+                            if !x_lockah.physics.fixed {
+                                x_lockah.physics.shape.translate(intasectah.1 * ratio); // I have no clue if this is correct but it works well enough
+                            }
+                            if !y_lockah.physics.fixed {
+                                y_lockah.physics.shape.translate(intasectah.1 * -1.0 * (1.0 - ratio));
+                            }
                             if sum != 0.0 {
                                 // WIP real collisions - very complex, I don't know enough physics rn but am learning
                                 /*let m1 = y_lockah.physics.mass;
