@@ -184,6 +184,10 @@ impl Server {
         self.place(Arc::new(Mutex::new(MissileLaunchingSystem::new())), x, y, a, sender).await
     }
 
+    async fn place_antirtf_missile(&mut self, x : f32, y : f32, a : f32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
+        self.place(Arc::new(Mutex::new(AntiRTFBullet::new())), x, y, a, sender).await
+    }
+
     async fn place_radiation(&mut self, x : f32, y : f32, size : f32, halflife : f32, strength : f32, a : f32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
         self.place(Arc::new(Mutex::new(Radiation::new(halflife, strength, size, size))), x, y, a, sender).await
     }
@@ -942,7 +946,10 @@ impl Client {
                                 },
                                 "m" => {
                                     server.place_mls(x, y, 0.0, Some(self)).await;
-                                }
+                                },
+                                "a" => {
+                                    server.place_antirtf_missile(x, y, 0.0, Some(self)).await;
+                                },
                                 &_ => {
                                     message.poison("INVALID PLACE TYPE");
                                 }

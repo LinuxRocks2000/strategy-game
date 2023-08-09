@@ -735,6 +735,15 @@ class Game {
                 }
             },
             {
+                name: "ANTI-RTF SMART MISSILE",
+                cost: 7,
+                descriptionL1: "Very fast missile with clever kinematics that chases",
+                descriptionL2: "down real time fighters and crashes into them.",
+                place: {
+                    word: "a"
+                }
+            },
+            {
                 name: "BASIC FIGHTER",
                 cost: 10,
                 descriptionL1: "Low motion speed, medium shot cooldown,",

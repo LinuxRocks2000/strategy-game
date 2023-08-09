@@ -115,7 +115,7 @@ impl GamePiece for AntiRTFBullet {
     fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
         thing.targeting.mode = TargetingMode::Nearest;
         thing.targeting.filter = TargetingFilter::RealTimeFighter;
-        thing.targeting.range = (0.0, 1000.0);
+        thing.targeting.range = (0.0, 5000.0); // losing these guys is possible, but not easy
         thing.max_health = 2.0;
         thing.collision_info.damage = 5.0;
         thing
@@ -133,10 +133,16 @@ impl GamePiece for AntiRTFBullet {
         match master.targeting.vector_to {
             Some(vector_to) => {
                 let goalangle = vector_to.angle();
-                master.physics.change_angle(loopize(goalangle, master.physics.angle()) * 0.2);
-                master.physics.thrust(1.0);
-                if (master.physics.velocity.angle() - goalangle).abs() > PI/4.0 {
-                    master.physics.velocity = master.physics.velocity * 0.95;
+                master.physics.change_angle(loopize(goalangle, master.physics.angle()) * 0.4);
+                if vector_to.magnitude() > 500.0 {
+                    master.physics.thrust(2.0); // go way faster if it's far away
+                }
+                else {
+                    master.physics.velocity = master.physics.velocity * 0.99; // add a lil' friction so it can decelerate after going super fast cross-board
+                    master.physics.thrust(1.0); // but also keep some thrust so the angle correction isn't moot
+                }
+                if (master.physics.velocity.angle() - goalangle).abs() > PI/3.0 {
+                    master.physics.velocity = master.physics.velocity * 0.9;
                 }
             },
             None => {}
