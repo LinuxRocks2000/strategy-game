@@ -485,16 +485,16 @@ class GameObject {
         return this.interpolate(interpolator, "h");
     }
 
-    draw(master, interpolator) {
+    draw(master, interpolator, zoomLevel = 1) {
         var ctx = master.ctx;
         ctx.lineWidth = 2;
         ctx.globalAlpha = 1;
         ctx.strokeStyle = "white";
-        var w = this.getW(interpolator);
-        var h = this.getH(interpolator);
+        var w = this.getW(interpolator) * zoomLevel;
+        var h = this.getH(interpolator) * zoomLevel;
         var a = this.getA(interpolator);
-        var x = this.getX(interpolator);
-        var y = this.getY(interpolator);
+        var x = this.getX(interpolator) * zoomLevel;
+        var y = this.getY(interpolator) * zoomLevel;
         ctx.translate(x, y);
         ctx.rotate(a);
         ctx.strokeRect(-w / 2, -h / 2, w, h);
@@ -533,13 +533,13 @@ class GameObject {
             ctx.strokeStyle = "green";
             ctx.fillStyle = "green";
             if (this.isHovered) {
-                ctx.fillRect(this.goalPos.x - 5, this.goalPos.y - 5, 10, 10);
+                ctx.fillRect(this.goalPos.x * zoomLevel - 5, this.goalPos.y * zoomLevel - 5, 10, 10);
             }
-            ctx.strokeRect(this.goalPos.x - 5, this.goalPos.y - 5, 10, 10);
+            ctx.strokeRect(this.goalPos.x * zoomLevel - 5, this.goalPos.y * zoomLevel - 5, 10, 10);
             ctx.beginPath();
-            ctx.moveTo(this.x, this.y);
-            ctx.lineTo(this.goalPos.x, this.goalPos.y);
-            ctx.lineTo(this.goalPos.x + Math.cos(this.goalPos.a) * 20, this.goalPos.y + Math.sin(this.goalPos.a) * 20);
+            ctx.moveTo(x, y);
+            ctx.lineTo(this.goalPos.x * zoomLevel, this.goalPos.y * zoomLevel);
+            ctx.lineTo((this.goalPos.x + Math.cos(this.goalPos.a) * 20) * zoomLevel, (this.goalPos.y + Math.sin(this.goalPos.a) * 20) * zoomLevel);
             ctx.stroke();
         }
     }
@@ -640,6 +640,7 @@ class Game {
             this.onmessage(evt.command, evt.args);
         });
         this.gamesize = 0;
+        this.zoomLevel = 0.05;
         this.canvas = document.getElementById("game");
         this.ctx = this.canvas.getContext("2d");
         this.health = -1;
@@ -1025,7 +1026,7 @@ class Game {
         }
     }
 
-    renderGameboard(interpolator) {
+    renderGameboard(interpolator, zoomLevel = 0.3) {
         this.ctx.fillStyle = "#111111";
         this.ctx.save();
         if (this.bgCall) {
@@ -1035,18 +1036,18 @@ class Game {
         this.ctx.translate(window.innerWidth / 2 - this.cX, window.innerHeight / 2 - this.cY);
         this.ctx.strokeStyle = "white";
         this.ctx.lineWidth = 4;
-        this.ctx.strokeRect(0, 0, this.gamesize, this.gamesize);
+        this.ctx.strokeRect(0, 0, this.gamesize * zoomLevel, this.gamesize * zoomLevel);
         //this.ctx.fillRect(0, 0, this.gamesize, this.gamesize);
         this.ctx.fillStyle = "black";
-        this.ctx.fillRect(this.gameX - 5, this.gameY - 5, 10, 10);
+        this.ctx.fillRect(this.gameX * zoomLevel - 5, this.gameY * zoomLevel - 5, 10, 10);
         Object.values(this.objects).forEach((item) => {
-            item.draw(this, interpolator);
+            item.draw(this, interpolator, zoomLevel);
         });
         this.ctx.restore();
     }
 
     cantPlace() { // COSMETIC: this is meant for user displays, NOT for logic.
-        if (!this.status.hasPlacedCastle && this.status.mouseWithinWideField) { // if it isn't 
+        if (!this.status.hasPlacedCastle && this.status.mouseWithinNarrowField) { // if it isn't 
             return true;
         }
         if (this.sidebar.inventorySelected) {
@@ -1123,7 +1124,7 @@ class Game {
             this.cY = this.castle.getY(interpolator);
         }
         this.ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
-        this.renderGameboard(interpolator);
+        this.renderGameboard(interpolator, this.zoomLevel);
         this.renderUI(interpolator);
     }
 
@@ -1143,8 +1144,8 @@ class Game {
     }
 
     doMouse() {
-        this.gameX = clamp(0, Math.round(this.cX + this.mouseX - window.innerWidth / 2), this.gamesize);
-        this.gameY = clamp(0, Math.round(this.cY + this.mouseY - window.innerHeight / 2), this.gamesize);
+        this.gameX = Math.round(clamp(0, Math.round(this.cX + this.mouseX - window.innerWidth / 2), this.gamesize)/this.zoomLevel);
+        this.gameY = Math.round(clamp(0, Math.round(this.cY + this.mouseY - window.innerHeight / 2), this.gamesize)/this.zoomLevel);
         this.status.mouseWithinNarrowField = this.mouseFieldCheck(400);
         this.status.mouseWithinWideField = this.mouseFieldCheck(600);
         if (this.castle) {
@@ -1178,8 +1179,8 @@ class Game {
                 this.cX += 20;
             }
         }
-        this.cX = clamp(0, this.cX, this.gamesize);
-        this.cY = clamp(0, this.cY, this.gamesize);
+        this.cX = clamp(0, this.cX, this.gamesize * this.zoomLevel);
+        this.cY = clamp(0, this.cY, this.gamesize * this.zoomLevel);
         this.sideScroll = clamp(0, this.sideScroll, this.sidebar.scrollHeight - window.innerHeight + 56)
     }
 
@@ -1253,7 +1254,7 @@ class Game {
                     });
                 }
             }
-            else if (!this.status.mouseWithinWideField){
+            else if (!this.status.mouseWithinNarrowField){
                 this.place("c");
                 this.status.hasPlacedCastle = true;
             }
