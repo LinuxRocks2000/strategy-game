@@ -1,4 +1,4 @@
-const DEBUG = false;
+const DEBUG = true;
 const INTERPOLATE = true;
 
 function clamp(min, val, max) {
@@ -529,14 +529,14 @@ class GameObject {
             ctx.strokeStyle = "green";
             ctx.beginPath();
             ctx.moveTo(x, y);
-            ctx.lineTo(this.x, this.y);
+            ctx.lineTo(this.x * zoomLevel, this.y * zoomLevel);
             ctx.stroke();
         }
         if (DEBUG) {
             ctx.globalAlpha = 1;
             ctx.strokeStyle = "blue";
             ctx.lineWidth = 1;
-            ctx.strokeRect(this.box[0], this.box[1], this.box[2] - this.box[0], this.box[3] - this.box[1]);
+            ctx.strokeRect(this.box[0] * zoomLevel, this.box[1] * zoomLevel, this.box[2] * zoomLevel - this.box[0] * zoomLevel, this.box[3] * zoomLevel - this.box[1] * zoomLevel);
         }
         if (this.isOurs && this.isEditable) {
             ctx.strokeStyle = "green";
@@ -730,6 +730,9 @@ class Game {
         this.mine = [];
         this.locked = false; // for objects to not be edited at the same time
         this.keysDown = {};
+        if (DEBUG) {
+            this.deletePoints = [];
+        }
         this.controls = {
             up: false,
             left: false,
@@ -889,6 +892,9 @@ class Game {
                 this.status.isRTF = false;
                 this.status.spectating = true;
                 this.mine = [];
+            }
+            if (DEBUG) {
+                this.deletePoints.push([this.objects[args[0]].x, this.objects[args[0]].y]);
             }
             delete this.objects[args[0]];
         }
@@ -1060,6 +1066,13 @@ class Game {
         Object.values(this.objects).forEach((item) => {
             item.draw(this, interpolator, zoomLevel);
         });
+        if (DEBUG) {
+            this.deletePoints.forEach(item => {
+                this.ctx.beginPath();
+                this.ctx.arc(item[0] * zoomLevel, item[1] * zoomLevel, 5, 0, Math.PI * 2);
+                this.ctx.fill();
+            });
+        }
         this.ctx.fillStyle = "black";
         this.ctx.fillRect(this.gameX * zoomLevel - 5, this.gameY * zoomLevel - 5, 10, 10);
         this.ctx.restore();
