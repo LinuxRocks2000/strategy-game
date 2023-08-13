@@ -1,4 +1,4 @@
-const DEBUG = true;
+const DEBUG = false;
 const INTERPOLATE = true;
 
 function clamp(min, val, max) {
