@@ -903,8 +903,8 @@ impl Client {
                                                 self.collect(100).await;
                                             },
                                             ClientMode::RealTimeFighter => {
-                                                server.place_basic_fighter(x - 100.0, y, PI, Some(self)).await;
-                                                server.place_basic_fighter(x + 100.0, y, 0.0, Some(self)).await;
+                                                //server.place_basic_fighter(x - 100.0, y, PI, Some(self)).await;
+                                                //server.place_basic_fighter(x + 100.0, y, 0.0, Some(self)).await;
                                             },
                                             ClientMode::Defense => {
                                                 server.place_basic_fighter(x - 200.0, y, PI, Some(self)).await;
@@ -1190,6 +1190,9 @@ async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>, broadcas
                         }
                     },
                     Ok (ClientCommand::Send (message)) => {
+                        if message.command == 'd' {
+                            println!("Deleted {}", message.args[0]);
+                        }
                         moi.send_protocol_message(message).await;
                     },
                     /*Ok (ClientCommand::SendToTeam (message, team)) => {
@@ -1305,7 +1308,7 @@ async fn main(){
     let args: Vec<String> = std::env::args().collect();
     use tokio::sync::mpsc::error::TryRecvError;
     let mut rng = rand::thread_rng();
-    let (broadcast_tx, _rx) = tokio::sync::broadcast::channel(16); // Give _rx a name because we want it to live to the end of this function; if it doesn't, the tx will be invalidated. or something.
+    let (broadcast_tx, _rx) = tokio::sync::broadcast::channel(128); // Give _rx a name because we want it to live to the end of this function; if it doesn't, the tx will be invalidated. or something.
     let mut server = Server {
         mode                : GameMode::Waiting,
         password            : "".to_string(),

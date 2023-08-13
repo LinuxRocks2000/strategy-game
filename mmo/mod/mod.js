@@ -54,6 +54,7 @@ class Protocol extends EventTarget {
     constructor(socket, onmessage) {
         super();
         this.socket = socket;
+        this.synchCallbach = onmessage;
         socket.onmessage = (message) => { this.message_recvd(message) };
         setInterval(() => {
             this.isOnline = this.pong; // if it's received a pong in 500ms, it's online; otherwise, it is not. Either way send a ping.
@@ -85,7 +86,13 @@ class Protocol extends EventTarget {
                 buffer = "";
                 i++;
             }
+            if (command == "d") {
+                console.log("DELETED" + args[0]);
+            }
             this.dispatchEvent(new ProtocolMessageReceivedEvent(command, args));
+            if (this.synchCallbach) {
+                this.synchCallbach(command, args);
+            }
         }
     }
 
@@ -644,10 +651,10 @@ class GameObject {
 
 class Game {
     constructor(socket) {
-        this.comms = new Protocol(socket);
-        this.comms.addEventListener("protocolmessagereceived", (evt) => {
+        this.comms = new Protocol(socket, (d1, d2) => {this.onmessage(d1, d2)});
+        /*this.comms.addEventListener("protocolmessagereceived", (evt) => {
             this.onmessage(evt.command, evt.args);
-        });
+        });*/
         this.gamesize = 0;
         this.zoomLevel = 0.7;
         this.canvas = document.getElementById("game");
@@ -972,6 +979,8 @@ class Game {
             obj.wOld = obj.w;
             obj.hOld = obj.h;
             obj.aOld = obj.a;
+            this.ctx.fillStyle = "red";
+            this.ctx.fillRect(obj.x, obj.y, 50, 50);
             obj.x = args[1] - 0;
             obj.y = args[2] - 0;
             if (args.length > 3) {
