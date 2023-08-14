@@ -1,4 +1,4 @@
-const DEBUG = false;
+const DEBUG = true;
 const INTERPOLATE = true;
 
 function clamp(min, val, max) {
@@ -9,6 +9,15 @@ function clamp(min, val, max) {
         val = max;
     }
     return val;
+}
+
+function mulberry32(a) {
+    return function () {
+        var t = a += 0x6D2B79F5;
+        t = Math.imul(t ^ t >>> 15, t | 1);
+        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    }
 }
 
 function randomizeBanner() {
@@ -606,6 +615,7 @@ class GameObject {
         this.isOurs = game.mine.indexOf(this.id) != -1;
         if (!game.status.moveShips && !game.status.isRTF) {
             this.editState = 0;
+            game.locked = false;
         }
         if (this.editState == 1) {
             this.goalPos.x = game.gameX;

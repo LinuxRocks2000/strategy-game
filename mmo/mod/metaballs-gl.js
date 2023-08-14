@@ -55,7 +55,7 @@ function prerenderBackground(size) {
             float r = balls[i].z;
             total += (r * r) / (dx * dx + dy * dy);
         }
-        gl_FragColor = vec4(floor(total * BANDCOUNT)/BANDCOUNT, 0.0, 0.0, 1.0);
+        gl_FragColor = vec4(floor(total * BANDCOUNT)/BANDCOUNT, 0.0, (1.0 - total) * 0.2, 1.0);
     }
     `, gl.FRAGMENT_SHADER);/*
     var error_log = gl.getShaderInfoLog(fragment);
