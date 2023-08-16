@@ -451,10 +451,52 @@ class Sidebar {
         }
         this.availability(ctx, "CASTLE PLACEMENT", 779, !parent.status.mouseWithinNarrowField);
         this.availability(ctx, "OBJECT PLACEMENT", 803, parent.status.canPlaceObject);
+
+        Object.values(parent.objects).forEach(obj => {
+            var scaleX = 220 / parent.gamesize;
+            var scaleY = 210 / parent.gamesize
+            var convertedX = 46 + obj.x * scaleX;
+            var convertedY = 66 + obj.y * scaleY;
+            var convertedW = obj.w * scaleX;
+            var convertedH = obj.h * scaleY;
+            if (!obj.isCompassVisible()) {
+                return;
+            }
+            if (obj.isOurs) {
+                ctx.fillStyle = "rgb(47, 237, 51)";
+            }
+            else {
+                ctx.fillStyle = "rgb(231, 57, 30)";
+            }
+            if (obj.type == "R" || obj.type == "c") {
+                ctx.beginPath();
+                ctx.moveTo(convertedX, convertedY - 3);
+                ctx.lineTo(convertedX + 3, convertedY);
+                ctx.lineTo(convertedX, convertedY + 3);
+                ctx.lineTo(convertedX - 3, convertedY);
+                ctx.closePath();
+                ctx.fill();
+            }
+            else if (obj.type == "B") {
+                ctx.strokeStyle = "white";
+                ctx.lineWidth = 1;
+                ctx.strokeRect(convertedX - convertedW/2, convertedY - convertedH/2, convertedW, convertedH);
+            }
+            else {
+                ctx.beginPath();
+                ctx.arc(convertedX, convertedY, 3, 0, Math.PI * 2);
+                ctx.globalAlpha = 0.5;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                ctx.beginPath();
+                ctx.arc(convertedX, convertedY, 1, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        });
     }
 
     availability(ctx, title, rootY, value) {
-        ctx.font = "12px 'Chakra Petch'";
+        ctx.font = "bold 12px 'Chakra Petch'";
         ctx.fillStyle = "white";
         ctx.fillText(title, 20, rootY + 12);
         ctx.fillStyle = value ? "#2FED33" : "#E7391E";
@@ -1084,6 +1126,10 @@ class Game {
             if (DEBUG) {
                 this.deletePoints.push([this.objects[args[0]].x, this.objects[args[0]].y]);
             }
+            var index = this.mine.indexOf(args[0]);
+            if (index != -1) {
+                this.mine.splice(index, 1);
+            }
             delete this.objects[args[0]];
         }
         else if (command == "n") {
@@ -1374,6 +1420,9 @@ class Game {
             this.status.canPlaceObject = this.mouseFieldCheckOnOne(400, this.castle);
             this.mine.forEach(id => {
                 var item = this.objects[id];
+                if (item == undefined) {
+                    return;
+                }
                 if (item.type == "F") {
                     this.status.canPlaceObject |= this.mouseFieldCheckOnOne(400, item);
                 }
