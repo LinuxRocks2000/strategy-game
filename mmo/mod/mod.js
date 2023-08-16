@@ -200,6 +200,7 @@ class Sidebar {
         this.dumpass.lineTo(266, 910);
         this.isInventory = false;
         this.scrollHeight = 1144;
+        this.tick = 0;
     }
 
     drawInventory(parent) {
@@ -412,18 +413,54 @@ class Sidebar {
             78
         ];
         lengths.forEach(item => {
-            this.drawBuuchie(ctx, "rgb(" + 255 * ((1 - lert) + 1 - (item - 78)/140) + ",0,0)", item - 18);
+            this.drawBuuchie(ctx, "rgb(" + 255 * ((1 - lert) + (1 - (item - 78)/140) * 0.5) + ",0,0)", item - 18);
         });
         ctx.beginPath();
         ctx.strokeStyle = "white";
         ctx.lineWidth = 1;
         ctx.moveTo(18, 884);
-        ctx.lineTo(185 + 18, 884);
+        ctx.lineTo(185, 884);
         ctx.moveTo(18, 905);
-        ctx.lineTo(144 + 18, 905);
+        ctx.lineTo(153, 905);
         ctx.stroke();
         ctx.fillStyle = "black";
         ctx.fillRect(17, 884, 185, 20);
+        var error = "OK";
+        if (nearestValue < 600 * 600) { // it's nearby
+            error = "NEAR THRESHOLD";
+        }
+        if (nearestValue < 400 * 400) {
+            error = "CLOSE PROXIMITY";
+            this.tick++; // make the flash twice as fast if you're in close proximity.
+        }
+        this.tick++;
+        if (this.tick > 60) {
+            this.tick = 0;
+        }
+        ctx.font = "12px 'Chakra Petch'";
+        ctx.fillStyle = "white";
+        ctx.fillText(error, 61, 899);
+        if (error != "OK") {
+            if (this.tick > 30) {
+                ctx.fillStyle = "red";
+                ctx.fillRect(18, 887, 39, 16);
+                ctx.fillStyle = "white";
+                ctx.font = "bold 12px 'Chakra Petch'";
+                ctx.fillText("WARN", 20, 899);
+            }
+        }
+        this.availability(ctx, "CASTLE PLACEMENT", 779, !parent.status.mouseWithinNarrowField);
+        this.availability(ctx, "OBJECT PLACEMENT", 803, parent.status.canPlaceObject);
+    }
+
+    availability(ctx, title, rootY, value) {
+        ctx.font = "12px 'Chakra Petch'";
+        ctx.fillStyle = "white";
+        ctx.fillText(title, 20, rootY + 12);
+        ctx.fillStyle = value ? "#2FED33" : "#E7391E";
+        ctx.fillRect(153, rootY, value ? 66 : 82, 16);
+        ctx.fillStyle = value ? "black" : "white";
+        ctx.fillText(value ? "AVAILABLE" : "UNAVAILABLE", 155, rootY + 12);
     }
 
     drawBuuchie(ctx, color, pos) {
@@ -1334,7 +1371,14 @@ class Game {
         this.status.mouseWithinNarrowField = this.mouseFieldCheck(400);
         this.status.mouseWithinWideField = this.mouseFieldCheck(600);
         if (this.castle) {
-            this.status.canPlaceObject = this.mouseFieldCheckOnOne(400, this.castle) && (this.status.moveShips || this.status.isRTF); // you can only place stuff during strat mode
+            this.status.canPlaceObject = this.mouseFieldCheckOnOne(400, this.castle);
+            this.mine.forEach(id => {
+                var item = this.objects[id];
+                if (item.type == "F") {
+                    this.status.canPlaceObject |= this.mouseFieldCheckOnOne(400, item);
+                }
+            });
+            this.status.canPlaceObject &= this.status.moveShips || this.status.isRTF; // you can only place stuff during strat mode
         }
     }
 
@@ -1342,7 +1386,7 @@ class Game {
         this.doMouse();
         Object.values(this.objects).forEach((item) => {
             item.bodyHovered = (this.gameX > item.x         - 10 && this.gameX < item.x         + 10 && this.gameY > item.y         - 10 && this.gameY < item.y         + 10)
-            item.isHovered = this.bodyHovered ||
+            item.isHovered = item.bodyHovered ||
                                (this.gameX > item.goalPos.x - 5  && this.gameX < item.goalPos.x + 5  && this.gameY > item.goalPos.y - 5  && this.gameY < item.goalPos.y + 5);
             item.interact(this);
         });
