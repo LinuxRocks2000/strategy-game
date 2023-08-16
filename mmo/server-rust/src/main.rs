@@ -1190,9 +1190,6 @@ async fn got_client(websocket : WebSocket, server : Arc<Mutex<Server>>, broadcas
                         }
                     },
                     Ok (ClientCommand::Send (message)) => {
-                        if message.command == 'd' {
-                            println!("Deleted {}", message.args[0]);
-                        }
                         moi.send_protocol_message(message).await;
                     },
                     /*Ok (ClientCommand::SendToTeam (message, team)) => {

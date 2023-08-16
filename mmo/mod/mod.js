@@ -1,4 +1,4 @@
-const DEBUG = true;
+const DEBUG = false;
 const INTERPOLATE = true;
 
 function clamp(min, val, max) {
@@ -398,6 +398,48 @@ class Sidebar {
         ctx.fillStyle = "red";
         ctx.fillRect(18, 999, 88, 2);
         this.scrollHeight = 1144;
+
+        ctx.fillStyle = "white";
+        ctx.font = "12px 'Chakra Petch'";
+        ctx.fillText("EARLY WARNING SYSTEM", 42, 852);
+        var lert = clamp(0, nearestValue / (1200 * 1200), 1);
+        var lengths = [
+            218,
+            203,
+            183,
+            155,
+            120,
+            78
+        ];
+        lengths.forEach(item => {
+            this.drawBuuchie(ctx, "rgb(" + 255 * ((1 - lert) + 1 - (item - 78)/140) + ",0,0)", item - 18);
+        });
+        ctx.beginPath();
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 1;
+        ctx.moveTo(18, 884);
+        ctx.lineTo(185 + 18, 884);
+        ctx.moveTo(18, 905);
+        ctx.lineTo(144 + 18, 905);
+        ctx.stroke();
+        ctx.fillStyle = "black";
+        ctx.fillRect(17, 884, 185, 20);
+    }
+
+    drawBuuchie(ctx, color, pos) {
+        ctx.strokeStyle = "white";
+        ctx.fillStyle = color;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(18, 869);
+        ctx.quadraticCurveTo(18, 861, 26, 861);
+        ctx.lineTo(18 + pos - 8, 861);
+        ctx.quadraticCurveTo(18 + pos, 861, 18 + pos - (8/68 * pos/2), 869);
+        ctx.lineTo(18 + pos / 2, 861 + 68);
+        ctx.lineTo(18, 861 + 68)
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
     }
 
     drawSquaresReadout(ctx, valueOf, rootX, rootY) {
@@ -477,13 +519,46 @@ class GameObject {
             x: this.x,
             y: this.y,
             a: this.a,
+            pathLen: 0,
+            initialX: this.x,
+            initialY: this.y,
             hasChanged: false
         };
         this.box = this.bbox();
         this.isOurs = false;
         this.isHovered = false;
+        this.bodyHovered = false;
         this.editState = 0; // 0 = none; 1 = picked up, moving; 2 = picked up, setting angle
         this.didMove = true; // whether or not it's moved since last tick
+    }
+
+    getTypeString() {
+        if (this.type == "c") {
+            return "CASTLE";
+        }
+        if (this.type == "R") {
+            return "RTF";
+        }
+        if (this.type == "w") {
+            return "WALL";
+        }
+        if (this.type == "b") {
+            return "BULLET";
+        }
+        if (this.type == "C") {
+            return "CHEST";
+        }
+        return "SHIP";
+    }
+
+    getFriendlinessString() {
+        if (this.isOurs) {
+            return "FRIENDLY";
+        }
+        else if (this.banner == 0) {
+            return "NEUTRAL";
+        }
+        return "ENEMY";
     }
 
     interpolate(value, property) {
@@ -522,10 +597,32 @@ class GameObject {
         var y = this.getY(interpolator) * zoomLevel;
         ctx.translate(x, y);
         ctx.rotate(a);
-        ctx.strokeRect(-w / 2, -h / 2, w, h);
         if (this.type == "R") {
             ctx.fillStyle = "white";
             ctx.fillRect(-w / 2, -h / 2, w, 5);
+            ctx.strokeRect(-w / 2, -h / 2, w, h);
+        }
+        else if (this.type == "c") {
+            ctx.drawImage(document.querySelector("img#castle"), -35, -35);
+        }
+        else if (this.type == "C") {
+            ctx.beginPath();
+            ctx.drawImage(document.querySelector("img#chest"), -11, -12);
+        }
+        else if (this.type == "f") {
+            ctx.rotate(Math.PI / 2);
+            ctx.drawImage(document.querySelector("img#ship"), -15, -15);
+            ctx.rotate(-Math.PI / 2);
+        }
+        else if (this.type == "b") {
+            ctx.fillStyle = "white";
+            ctx.fillRect(-w / 2, -h / 2, w, h);
+        }
+        else if (this.type == "w") {
+            ctx.drawImage(document.querySelector("img#wall"), -10, -10);
+        }
+        else {
+            ctx.strokeRect(-w / 2, -h / 2, w, h);
         }
         ctx.rotate(-a);
         ctx.font = "10px 'Chakra Petch'";
@@ -566,6 +663,36 @@ class GameObject {
             ctx.lineTo(this.goalPos.x * zoomLevel, this.goalPos.y * zoomLevel);
             ctx.lineTo((this.goalPos.x + Math.cos(this.goalPos.a) * 20) * zoomLevel, (this.goalPos.y + Math.sin(this.goalPos.a) * 20) * zoomLevel);
             ctx.stroke();
+        }
+        if (this.bodyHovered) {
+            ctx.fillStyle = "#F3BB38";
+            var tooltipHeight = this.isOurs ? 30 : 20;
+            ctx.fillRect(x - 80, y - tooltipHeight/2, 40, tooltipHeight);
+            ctx.beginPath();
+            ctx.moveTo(x - 41, y - 5);
+            ctx.lineTo(x - 35, y);
+            ctx.lineTo(x - 41, y + 5);
+            ctx.closePath();
+            ctx.fill();
+            ctx.font = "8px 'Chakra Petch'";
+            ctx.fillStyle = "black";
+            ctx.fillText(this.getTypeString(), x - 78, y - tooltipHeight/2 + 9);
+            ctx.fillText(this.getFriendlinessString(), x - 78, y - tooltipHeight/2 + 18);
+            if (this.isOurs) {
+                var dx = this.x - this.goalPos.initialX;
+                var dy = this.y - this.goalPos.initialY;
+                dx *= dx;
+                dy *= dy;
+                var displacement = Math.sqrt(dx + dy);
+                var toPrint = Math.round((displacement / this.goalPos.pathLen) * 100) + "%";
+                if (this.goalPos.pathLen == 0) {
+                    toPrint = "0%";
+                    if (this.goalPos.displacement == 0) {
+                        toPrint = "100%";
+                    }
+                }
+                ctx.fillText(toPrint, x - 78, y - tooltipHeight / 2 + 27);
+            }
         }
     }
 
@@ -620,6 +747,13 @@ class GameObject {
         if (this.editState == 1) {
             this.goalPos.x = game.gameX;
             this.goalPos.y = game.gameY;
+            this.goalPos.initialX = this.x;
+            this.goalPos.initialY = this.y;
+            var dx = this.goalPos.x - this.goalPos.initialX;
+            var dy = this.goalPos.y - this.goalPos.initialY;
+            dx *= dx;
+            dy *= dy;
+            this.goalPos.pathLen = Math.sqrt(dx + dy);
             this.goalPos.hasChanged = true;
         }
         else if (this.editState == 2) {
@@ -1207,8 +1341,9 @@ class Game {
     interactionLoop() { // Is called as much as possible; handles interaction with the user
         this.doMouse();
         Object.values(this.objects).forEach((item) => {
-            item.isHovered = (this.gameX > item.x         - 5 && this.gameX < item.x         + 5 && this.gameY > item.y         - 5 && this.gameY < item.y         + 5) ||
-                             (this.gameX > item.goalPos.x - 5 && this.gameX < item.goalPos.x + 5 && this.gameY > item.goalPos.y - 5 && this.gameY < item.goalPos.y + 5);
+            item.bodyHovered = (this.gameX > item.x         - 10 && this.gameX < item.x         + 10 && this.gameY > item.y         - 10 && this.gameY < item.y         + 10)
+            item.isHovered = this.bodyHovered ||
+                               (this.gameX > item.goalPos.x - 5  && this.gameX < item.goalPos.x + 5  && this.gameY > item.goalPos.y - 5  && this.gameY < item.goalPos.y + 5);
             item.interact(this);
         });
 
