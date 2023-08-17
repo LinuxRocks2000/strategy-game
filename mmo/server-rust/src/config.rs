@@ -39,7 +39,8 @@ struct ServerConfigFile {
     strat_secs      : Option<f32>,
     play_secs       : Option<f32>,
     headless        : Option<bool>,
-    permit_npcs     : Option<bool>
+    permit_npcs     : Option<bool>,
+    port            : Option<u16>
 }
 
 pub struct Config {
@@ -59,6 +60,10 @@ impl Config {
 
     pub async fn load_into(&self, server : &mut Server) {
         server.gamesize = self.json.world_size;
+        server.port = match self.json.port {
+            Some(port) => port,
+            None => 3000
+        };
         if self.json.headless.is_some() {
             server.is_headless = self.json.headless.unwrap();
         }

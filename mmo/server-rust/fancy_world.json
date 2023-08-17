@@ -93,5 +93,6 @@
         "min_players": 2,
         "max_players": 10,
         "timeout": 1000
-    }
+    },
+    "port": 3001
 }
