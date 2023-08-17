@@ -174,7 +174,7 @@ impl GamePiece for Missile {
     }
 
     fn get_does_collide(&self, id : char) -> bool {
-        id != 'c'
+        true
     }
 
     fn cost(&self) -> u32 {

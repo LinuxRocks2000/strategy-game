@@ -478,9 +478,8 @@ class Sidebar {
                 ctx.fill();
             }
             else if (obj.type == "B") {
-                ctx.strokeStyle = "white";
-                ctx.lineWidth = 1;
-                ctx.strokeRect(convertedX - convertedW/2, convertedY - convertedH/2, convertedW, convertedH);
+                ctx.fillStyle = "#555";
+                ctx.fillRect(convertedX - convertedW/2, convertedY - convertedH/2, convertedW, convertedH);
             }
             else {
                 ctx.beginPath();
@@ -739,24 +738,49 @@ class GameObject {
             ctx.strokeRect(this.goalPos.x * zoomLevel - 5, this.goalPos.y * zoomLevel - 5, 10, 10);
             ctx.beginPath();
             ctx.moveTo(x, y);
+            ctx.setLineDash([2, 4]);
+            ctx.strokeStyle = "white";
+            ctx.fillStyle = "#F3BB38";
+            ctx.lineWidth = 1;
             ctx.lineTo(this.goalPos.x * zoomLevel, this.goalPos.y * zoomLevel);
-            ctx.lineTo((this.goalPos.x + Math.cos(this.goalPos.a) * 20) * zoomLevel, (this.goalPos.y + Math.sin(this.goalPos.a) * 20) * zoomLevel);
             ctx.stroke();
+            ctx.beginPath();
+            ctx.setLineDash([]);
+            ctx.translate(this.goalPos.x * zoomLevel, this.goalPos.y * zoomLevel);
+            ctx.rotate(this.goalPos.a + Math.PI/2);
+            var gradient = ctx.createLinearGradient(14, -14, 14, 14);
+            gradient.addColorStop(0.0, "#F3BB38");
+            gradient.addColorStop(0.5, "transparent");
+            ctx.strokeStyle = gradient;
+            //ctx.moveTo(this.goalPos.x * zoomLevel, this.goalPos.y * zoomLevel);
+            //ctx.lineTo((this.goalPos.x + Math.cos(this.goalPos.a) * 20) * zoomLevel, (this.goalPos.y + Math.sin(this.goalPos.a) * 20) * zoomLevel);
+            ctx.arc(0, 0, 14, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(0, -18);
+            ctx.lineTo(2, -13);
+            ctx.lineTo(-2, -13);
+            ctx.closePath();
+            ctx.fill();
+            ctx.rotate(-this.goalPos.a - Math.PI/2);
+            ctx.translate(-this.goalPos.x * zoomLevel, -this.goalPos.y * zoomLevel);
         }
         if (this.bodyHovered) {
             ctx.fillStyle = "#F3BB38";
-            var tooltipHeight = this.isOurs ? 30 : 20;
-            ctx.fillRect(x - 80, y - tooltipHeight/2, 40, tooltipHeight);
+            ctx.font = "8px 'Chakra Petch'";
+            var tooltipHeight = this.isOurs ? 40 : 30;
+            var tooltipWidth = Math.max(41, ctx.measureText(master.banners[this.banner]).width + 4);
+            ctx.fillRect(x - 40 - tooltipWidth, y - tooltipHeight/2, tooltipWidth, tooltipHeight);
             ctx.beginPath();
             ctx.moveTo(x - 41, y - 5);
             ctx.lineTo(x - 35, y);
             ctx.lineTo(x - 41, y + 5);
             ctx.closePath();
             ctx.fill();
-            ctx.font = "8px 'Chakra Petch'";
             ctx.fillStyle = "black";
-            ctx.fillText(this.getTypeString(), x - 78, y - tooltipHeight/2 + 9);
-            ctx.fillText(this.getFriendlinessString(), x - 78, y - tooltipHeight/2 + 18);
+            ctx.fillText(this.getTypeString(), x - 38 - tooltipWidth, y - tooltipHeight/2 + 9);
+            ctx.fillText(this.getFriendlinessString(), x - 38 - tooltipWidth, y - tooltipHeight / 2 + 18);
+            ctx.fillText(master.banners[this.banner], x - 38 - tooltipWidth, y - tooltipHeight / 2 + 27)
             if (this.isOurs) {
                 var dx = this.x - this.goalPos.initialX;
                 var dy = this.y - this.goalPos.initialY;
@@ -770,7 +794,7 @@ class GameObject {
                         toPrint = "100%";
                     }
                 }
-                ctx.fillText(toPrint, x - 78, y - tooltipHeight / 2 + 27);
+                ctx.fillText(toPrint, x - 38 - tooltipWidth, y - tooltipHeight / 2 + 36);
             }
         }
     }
