@@ -491,6 +491,8 @@ class Sidebar {
                 ctx.arc(convertedX, convertedY, 1, 0, Math.PI * 2);
                 ctx.fill();
             }
+            ctx.fillStyle = "white";
+            ctx.fillRect(46 + parent.gameX * scaleX - 1, 66 + parent.gameY * scaleY - 1, 2, 2);
         });
     }
 

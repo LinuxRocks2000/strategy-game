@@ -173,7 +173,7 @@ impl GamePiece for Missile {
         'h'
     }
 
-    fn get_does_collide(&self, id : char) -> bool {
+    fn get_does_collide(&self, _id : char) -> bool {
         true
     }
 
