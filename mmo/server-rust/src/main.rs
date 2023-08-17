@@ -130,74 +130,75 @@ impl Server {
         return moidah;
     }
 
-    async fn place(&mut self, piece : Arc<Mutex<dyn GamePiece + Send + Sync>>, x : f32, y : f32, a : f32, mut sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
-        let la_thang = Arc::new(Mutex::new(GamePieceBase::new(piece, x, y, a).await));
+    async fn place(&mut self, piece : Box<dyn GamePiece + Send + Sync>, x : f32, y : f32, a : f32, mut sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
+        let la_thang = GamePieceBase::new(piece, x, y, a);
         if self.costs && sender.is_some() {
-            let cost = la_thang.lock().await.cost().await as i32;
+            let cost = la_thang.cost() as i32;
             if cost > sender.as_ref().unwrap().score {
-                return la_thang;
+                return Arc::new(Mutex::new(la_thang));
             }
             sender.as_mut().unwrap().collect(-cost).await;
         }
-        self.add(la_thang.clone(), sender).await;
-        la_thang
+        let ret = Arc::new(Mutex::new(la_thang));
+        self.add(ret.clone(), sender).await;
+        ret
     }
 
     async fn place_wall(&mut self, x : f32, y : f32, sender : Option<&mut Client>) {
-        self.place(Arc::new(Mutex::new(Wall::new())), x, y, 0.0, sender).await;
+        self.place(Box::new(Wall::new()), x, y, 0.0, sender).await;
     }
 
     async fn place_castle(&mut self, x : f32, y : f32, is_rtf : bool, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
-        self.place(Arc::new(Mutex::new(Castle::new(is_rtf))), x, y, 0.0, sender).await
+        self.place(Box::new(Castle::new(is_rtf)), x, y, 0.0, sender).await
     }
 
     async fn place_basic_fighter(&mut self, x : f32, y : f32, a : f32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
-        self.place(Arc::new(Mutex::new(BasicFighter::new())), x, y, a, sender).await
+        self.place(Box::new(BasicFighter::new()), x, y, a, sender).await
     }
 
     async fn place_block(&mut self, x : f32, y : f32, a : f32, w : f32, h : f32) { // No sender; blocks can't be placed by clients.
-        let thing = self.place(Arc::new(Mutex::new(Block::new())), x, y, a, None).await;
+        let thing = self.place(Box::new(Block::new()), x, y, a, None).await;
         let mut lock = thing.lock().await;
-        lock.physics.shape.w = w;
-        lock.physics.shape.h = h;
-        lock.physics.set_cx(x);
-        lock.physics.set_cy(y);
+        lock.exposed_properties.physics.shape.w = w;
+        lock.exposed_properties.physics.shape.h = h;
+        lock.exposed_properties.physics.set_cx(x);
+        lock.exposed_properties.physics.set_cy(y);
     }
 
     async fn place_tie_fighter(&mut self, x : f32, y : f32, a : f32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
-        self.place(Arc::new(Mutex::new(TieFighter::new())), x, y, a, sender).await
+        self.place(Box::new(TieFighter::new()), x, y, a, sender).await
     }
 
     async fn place_sniper(&mut self, x : f32, y : f32, a : f32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
-        self.place(Arc::new(Mutex::new(Sniper::new())), x, y, a, sender).await
+        self.place(Box::new(Sniper::new()), x, y, a, sender).await
     }
 
     async fn place_missile(&mut self, x : f32, y : f32, a : f32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
-        self.place(Arc::new(Mutex::new(Missile::new())), x, y, a, sender).await
+        self.place(Box::new(Missile::new()), x, y, a, sender).await
     }
 
     async fn place_turret(&mut self, x : f32, y : f32, a : f32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
-        self.place(Arc::new(Mutex::new(Turret::new())), x, y, a, sender).await
+        self.place(Box::new(Turret::new()), x, y, a, sender).await
     }
 
     async fn place_mls(&mut self, x : f32, y : f32, a : f32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
-        self.place(Arc::new(Mutex::new(MissileLaunchingSystem::new())), x, y, a, sender).await
+        self.place(Box::new(MissileLaunchingSystem::new()), x, y, a, sender).await
     }
 
     async fn place_antirtf_missile(&mut self, x : f32, y : f32, a : f32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
-        self.place(Arc::new(Mutex::new(AntiRTFBullet::new())), x, y, a, sender).await
+        self.place(Box::new(AntiRTFBullet::new()), x, y, a, sender).await
     }
 
     async fn place_radiation(&mut self, x : f32, y : f32, size : f32, halflife : f32, strength : f32, a : f32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
-        self.place(Arc::new(Mutex::new(Radiation::new(halflife, strength, size, size))), x, y, a, sender).await
+        self.place(Box::new(Radiation::new(halflife, strength, size, size)), x, y, a, sender).await
     }
 
     async fn place_nuke(&mut self, x : f32, y : f32, a : f32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
-        self.place(Arc::new(Mutex::new(Nuke::new())), x, y, a, sender).await
+        self.place(Box::new(Nuke::new()), x, y, a, sender).await
     }
 
     async fn place_fort(&mut self, x : f32, y : f32, a : f32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
-        self.place(Arc::new(Mutex::new(Fort::new())), x, y, a, sender).await
+        self.place(Box::new(Fort::new()), x, y, a, sender).await
     }
 
     async fn place_random_npc(&mut self) { // Drop a random npc
@@ -209,18 +210,18 @@ impl Server {
         let y : f32 = (randlock.next() % self.gamesize) as f32;
         let chance = randlock.next() % 6;
         drop(randlock);
-        let thing : Arc<Mutex<dyn GamePiece + Send + Sync>> = match chance {
+        let thing : Box<dyn GamePiece + Send + Sync> = match chance {
             0 | 1 => {
-                Arc::new(Mutex::new(npc::Red::new()))
+                Box::new(npc::Red::new())
             },
             2 | 3 => {
-                Arc::new(Mutex::new(npc::White::new()))
+                Box::new(npc::White::new())
             },
             4 => {
-                Arc::new(Mutex::new(npc::Black::new()))
+                Box::new(npc::Black::new())
             },
             5 => {
-                Arc::new(Mutex::new(npc::Target::new()))
+                Box::new(npc::Target::new())
             },
             _ => {
                 println!("THIS IS PROBABLY NOT A GOOD THING");
@@ -230,7 +231,7 @@ impl Server {
         for object in &self.objects { // This part is fine
             let lelock = object.lock().await;
             if lelock.identify() == 'c' || lelock.identify() == 'R' {
-                if (lelock.physics.cx() - x).abs() < 400.0 && (lelock.physics.cy() - y).abs() < 400.0 {
+                if (lelock.exposed_properties.physics.cx() - x).abs() < 400.0 && (lelock.exposed_properties.physics.cy() - y).abs() < 400.0 {
                     println!("Berakx");
                     return;
                 }
@@ -245,18 +246,18 @@ impl Server {
         let y : f32 = (randlock.next() % self.gamesize) as f32;
         let chance = randlock.next() % 100;
         drop(randlock);
-        let thing : Arc<Mutex<dyn GamePiece + Send + Sync>> = {
+        let thing : Box<dyn GamePiece + Send + Sync> = {
             if chance < 50 {
-                Arc::new(Mutex::new(Chest::new()))
+                Box::new(Chest::new())
             }
             else {
-                Arc::new(Mutex::new(Wall::new()))
+                Box::new(Wall::new())
             }
         };
         for object in &self.objects { // This part is fine
             let lelock = object.lock().await;
             if lelock.identify() == 'c' || lelock.identify() == 'R' {
-                if (lelock.physics.cx() - x).abs() < 400.0 && (lelock.physics.cy() - y).abs() < 400.0 {
+                if (lelock.exposed_properties.physics.cx() - x).abs() < 400.0 && (lelock.exposed_properties.physics.cy() - y).abs() < 400.0 {
                     println!("Berakx");
                     return;
                 }
@@ -270,12 +271,12 @@ impl Server {
 
     pub async fn shoot(&mut self, bullet_type : BulletType, position : Vector2, velocity : Vector2, range : i32, sender : Option<&mut Client>) -> Arc<Mutex<GamePieceBase>> {
         let bullet = self.place(match bullet_type {
-            BulletType::Bullet => Arc::new(Mutex::new(Bullet::new())),
-            BulletType::AntiRTF => Arc::new(Mutex::new(AntiRTFBullet::new()))
+            BulletType::Bullet => Box::new(Bullet::new()),
+            BulletType::AntiRTF => Box::new(AntiRTFBullet::new())
         }, position.x, position.y, velocity.angle(), sender).await;
         let mut lock = bullet.lock().await;
-        lock.physics.velocity = velocity;
-        lock.ttl = range;
+        lock.exposed_properties.physics.velocity = velocity;
+        lock.exposed_properties.ttl = range;
         drop(lock);
         bullet
     }
@@ -300,10 +301,10 @@ impl Server {
                 }
                 let mut x_lockah = self.objects[x].lock().await; // Because of the phase shift these should never be the same item.
                 let mut y_lockah = self.objects[y].lock().await;
-                let intasectah = x_lockah.physics.shape().intersects(y_lockah.physics.shape());
+                let intasectah = x_lockah.exposed_properties.physics.shape().intersects(y_lockah.exposed_properties.physics.shape());
                 if intasectah.0 {
                     let mut is_collide = false;
-                    if x_lockah.get_does_collide(y_lockah.identify()).await {
+                    if x_lockah.get_does_collide(y_lockah.identify()) {
                         x_lockah.damage(y_lockah.get_collision_info().damage);
                         if x_lockah.dead() && (y_lockah.get_banner() != x_lockah.get_banner()) {
                             /*let killah = self.get_client_by_banner(y_lockah.get_banner()).await;
@@ -311,11 +312,11 @@ impl Server {
                                 let amount = x_lockah.capture().await as i32;
                                 killah.unwrap().lock().await.collect(amount).await;
                             }*/
-                            self.broadcast_tx.send(ClientCommand::ScoreTo (y_lockah.get_banner(), x_lockah.capture().await as i32)).expect("Broadcast failed");
+                            self.broadcast_tx.send(ClientCommand::ScoreTo (y_lockah.get_banner(), x_lockah.capture() as i32)).expect("Broadcast failed");
                         }
                         is_collide = true;
                     }
-                    if y_lockah.get_does_collide(x_lockah.identify()).await {
+                    if y_lockah.get_does_collide(x_lockah.identify()) {
                         y_lockah.damage(x_lockah.get_collision_info().damage);
                         if y_lockah.dead() && (y_lockah.get_banner() != x_lockah.get_banner()) {
                             /*let killah = self.get_client_by_banner(x_lockah.get_banner()).await;
@@ -323,29 +324,29 @@ impl Server {
                                 let amount = y_lockah.capture().await as i32;
                                 killah.unwrap().lock().await.collect(amount).await;
                             }*/
-                            self.broadcast_tx.send(ClientCommand::ScoreTo (x_lockah.get_banner(), y_lockah.capture().await as i32)).expect("Broadcast failed");
+                            self.broadcast_tx.send(ClientCommand::ScoreTo (x_lockah.get_banner(), y_lockah.capture() as i32)).expect("Broadcast failed");
                         }
                         is_collide = true;
                     }
                     if is_collide {
-                        if x_lockah.physics.solid || y_lockah.physics.solid {
-                            let sum = y_lockah.physics.velocity.magnitude() + x_lockah.physics.velocity.magnitude();
+                        if x_lockah.exposed_properties.physics.solid || y_lockah.exposed_properties.physics.solid {
+                            let sum = y_lockah.exposed_properties.physics.velocity.magnitude() + x_lockah.exposed_properties.physics.velocity.magnitude();
                             let ratio = if sum == 0.0 {
                                 //y_lockah.physics.mass / (x_lockah.physics.mass + y_lockah.physics.mass)
-                                if y_lockah.physics.mass < x_lockah.physics.mass {
+                                if y_lockah.exposed_properties.physics.mass < x_lockah.exposed_properties.physics.mass {
                                     0.0
                                 } else {
                                     1.0
                                 }
                             }
                             else {
-                                x_lockah.physics.velocity.magnitude() / sum
+                                x_lockah.exposed_properties.physics.velocity.magnitude() / sum
                             };
-                            if !x_lockah.physics.fixed {
-                                x_lockah.physics.shape.translate(intasectah.1 * ratio); // I have no clue if this is correct but it works well enough
+                            if !x_lockah.exposed_properties.physics.fixed {
+                                x_lockah.exposed_properties.physics.shape.translate(intasectah.1 * ratio); // I have no clue if this is correct but it works well enough
                             }
-                            if !y_lockah.physics.fixed {
-                                y_lockah.physics.shape.translate(intasectah.1 * -1.0 * (1.0 - ratio));
+                            if !y_lockah.exposed_properties.physics.fixed {
+                                y_lockah.exposed_properties.physics.shape.translate(intasectah.1 * -1.0 * (1.0 - ratio));
                             }
                             if sum != 0.0 {
                                 // WIP real collisions - very complex, I don't know enough physics rn but am learning
@@ -364,16 +365,16 @@ impl Server {
                                 y_lockah.physics.velocity = x_perp * (y_lockah.physics.velocity.magnitude()/sum) + y_para; // add the old perpendicular component, allowing it to slide
                                 x_lockah.physics.velocity = y_perp * (x_lockah.physics.velocity.magnitude()/sum) + x_para;*/
                                 // VERY DUMB VERSION
-                                let m1 = y_lockah.physics.mass;
-                                let m2 = x_lockah.physics.mass;
+                                let m1 = y_lockah.exposed_properties.physics.mass;
+                                let m2 = x_lockah.exposed_properties.physics.mass;
                                 let total = m1 + m2;
-                                let (x_para, x_perp) = x_lockah.physics.velocity.cut(intasectah.1);
-                                let (y_para, y_perp) = y_lockah.physics.velocity.cut(intasectah.1);
-                                if !y_lockah.physics.fixed {
-                                    y_lockah.physics.velocity = y_perp + x_para * (m2 / total);
+                                let (x_para, x_perp) = x_lockah.exposed_properties.physics.velocity.cut(intasectah.1);
+                                let (y_para, y_perp) = y_lockah.exposed_properties.physics.velocity.cut(intasectah.1);
+                                if !y_lockah.exposed_properties.physics.fixed {
+                                    y_lockah.exposed_properties.physics.velocity = y_perp + x_para * (m2 / total);
                                 }
-                                if !x_lockah.physics.fixed {
-                                    x_lockah.physics.velocity = x_perp + y_para * (m1 / total);
+                                if !x_lockah.exposed_properties.physics.fixed {
+                                    x_lockah.exposed_properties.physics.velocity = x_perp + y_para * (m1 / total);
                                 }
                             }
                         }
@@ -572,7 +573,7 @@ impl Server {
                 args: vec![piece.get_id().to_string()]
             }).await;
         }
-        self.broadcast(piece.get_new_message().await);
+        self.broadcast(piece.get_new_message());
         self.objects.push(pc.clone());
     }
 
@@ -641,7 +642,7 @@ impl Server {
             }).await;
         }
         for piece in &self.objects {
-            user.send_protocol_message(piece.lock().await.get_new_message().await).await;
+            user.send_protocol_message(piece.lock().await.get_new_message()).await;
         }
         user.send_protocol_message(ProtocolMessage { // m also doubles as a "you have all the data" message
             command: 'm',
@@ -1013,9 +1014,9 @@ impl Client {
                     for object in &server.objects {
                         let mut lock = object.lock().await;
                         if lock.get_id() == id {
-                            lock.goal_x = x;
-                            lock.goal_y = y;
-                            lock.goal_a = a;
+                            lock.exposed_properties.goal_x = x;
+                            lock.exposed_properties.goal_y = y;
+                            lock.exposed_properties.goal_a = a;
                         }
                     }
                 },
@@ -1038,13 +1039,13 @@ impl Client {
                         if message.args[3] == "1" { // AIRBRAKE
                             resistance = 0.8;
                         }
-                        castle.shooter_properties.suppress = !(message.args[4] == "1");
-                        let thrust = Vector2::new_from_manda(thrust, castle.physics.angle() - PI/2.0);
-                        castle.physics.velocity += thrust;
-                        castle.physics.velocity *= resistance;
-                        castle.physics.angle_v += angle_thrust;
-                        castle.physics.angle_v *= 0.9;
-                        castle.physics.angle_v *= resistance;
+                        castle.exposed_properties.shooter_properties.suppress = !(message.args[4] == "1");
+                        let thrust = Vector2::new_from_manda(thrust, castle.exposed_properties.physics.angle() - PI/2.0);
+                        castle.exposed_properties.physics.velocity += thrust;
+                        castle.exposed_properties.physics.velocity *= resistance;
+                        castle.exposed_properties.physics.angle_v += angle_thrust;
+                        castle.exposed_properties.physics.angle_v *= 0.9;
+                        castle.exposed_properties.physics.angle_v *= resistance;
                     }
                 },
                 'T' => { // Talk
@@ -1088,7 +1089,7 @@ impl Client {
                     for object in &server.objects {
                         let mut lawk = object.lock().await;
                         if lawk.get_id() == id {
-                            lawk.upgrade(upg).await;
+                            lawk.upgrade(upg);
                             break;
                         }
                     }
@@ -1344,11 +1345,12 @@ async fn main(){
     tokio::task::spawn(async move {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_millis((1000.0/FPS) as u64));
         loop {
+            use tokio::time::Instant;
             interval.tick().await;
             let mut lawk = server_mutex_loopah.lock().await; // Tracking le deadlock: It *always*, invariably, hangs here. It never makes it inside the mainloop. Thus the problem cannot be directly related to the mainloop.
-            //let start = Instant::now();
+            let start = Instant::now();
             lawk.mainloop().await;
-            //println!("Mainloop took {:?}", start.elapsed());
+            println!("Mainloop took {:?}", start.elapsed());
             match commandget.try_recv() {
                 Ok (ServerCommand::Start) => {
                     lawk.start().await;

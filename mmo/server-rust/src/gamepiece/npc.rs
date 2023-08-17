@@ -1,12 +1,12 @@
 // Grand unified file for non player character types
 
-use super::GamePieceBase;
 use super::GamePiece;
 use crate::Server;
 use crate::physics::PhysicsObject;
 use super::TargetingFilter;
 use super::TargetingMode;
 use crate::vector::Vector2;
+use crate::ExposedProperties;
 use std::f32::consts::PI;
 use crate::functions::*;
 
@@ -59,15 +59,14 @@ impl Target {
 }
 
 impl GamePiece for Red {
-    fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
+    fn construct<'a>(&'a self, thing : &mut ExposedProperties) {
         thing.targeting.mode = TargetingMode::Nearest;
         thing.targeting.filter = TargetingFilter::Castles;
-        thing.speed_cap = 20.0;
+        thing.physics.speed_cap = 20.0;
         thing.targeting.range = (0.0, 0.0); // no range
         thing.ttl = 1800;
-        thing.max_health = 1.0;
+        thing.health_properties.max_health = 1.0;
         thing.collision_info.damage = 2.0;
-        thing
     }
 
     fn obtain_physics(&self) -> PhysicsObject {
@@ -86,32 +85,31 @@ impl GamePiece for Red {
         5
     }
 
-    fn update(&mut self, master : &mut GamePieceBase, _servah : &mut Server) {
-        match master.targeting.vector_to {
+    fn update(&mut self, properties : &mut ExposedProperties, _servah : &mut Server) {
+        match properties.targeting.vector_to {
             Some(vector_to) => {
                 let goalangle = vector_to.angle();
-                master.physics.change_angle(loopize(goalangle, master.physics.angle()) * 0.14);
-                master.physics.thrust(0.2);
+                properties.physics.change_angle(loopize(goalangle, properties.physics.angle()) * 0.14);
+                properties.physics.thrust(0.2);
             },
             None => {}
         }
         if self.start_cooldown != 0 {
             self.start_cooldown -= 1;
-            master.physics.velocity = master.physics.velocity * 0.8;
+            properties.physics.velocity = properties.physics.velocity * 0.8;
         }
     }
 }
 
 impl GamePiece for White {
-    fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
+    fn construct<'a>(&'a self, thing : &mut ExposedProperties) {
         thing.targeting.mode = TargetingMode::Nearest;
         thing.targeting.filter = TargetingFilter::Fighters;
         thing.targeting.range = (0.0, 0.0); // no range
-        thing.speed_cap = 15.0;
+        thing.physics.speed_cap = 15.0;
         thing.ttl = 1800;
-        thing.max_health = 1.0;
+        thing.health_properties.max_health = 1.0;
         thing.collision_info.damage = 2.0;
-        thing
     }
 
     fn obtain_physics(&self) -> PhysicsObject {
@@ -130,32 +128,31 @@ impl GamePiece for White {
         5
     }
 
-    fn update(&mut self, master : &mut GamePieceBase, _servah : &mut Server) {
-        match master.targeting.vector_to {
+    fn update(&mut self, properties : &mut ExposedProperties, _servah : &mut Server) {
+        match properties.targeting.vector_to {
             Some(vector_to) => {
                 let goalangle = vector_to.angle();
-                master.physics.change_angle(loopize(goalangle, master.physics.angle()) * 0.25);
-                master.physics.thrust(0.2);
+                properties.physics.change_angle(loopize(goalangle, properties.physics.angle()) * 0.25);
+                properties.physics.thrust(0.2);
             },
             None => {}
         }
         if self.start_cooldown != 0 {
             self.start_cooldown -= 1;
-            master.physics.velocity = master.physics.velocity * 0.8;
+            properties.physics.velocity = properties.physics.velocity * 0.8;
         }
     }
 }
 
 impl GamePiece for Black {
-    fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
+    fn construct<'a>(&'a self, thing : &mut ExposedProperties) {
         thing.targeting.mode = TargetingMode::Nearest;
         thing.targeting.filter = TargetingFilter::Castles;
         thing.targeting.range = (0.0, 0.0); // no range
         thing.ttl = 1800;
-        thing.max_health = 1.0;
-        thing.speed_cap = 35.0; // Very slightly slower than a speedship
+        thing.health_properties.max_health = 1.0;
+        thing.physics.speed_cap = 35.0; // Very slightly slower than a speedship
         thing.collision_info.damage = 2.0;
-        thing
     }
 
     fn obtain_physics(&self) -> PhysicsObject {
@@ -174,32 +171,31 @@ impl GamePiece for Black {
         5
     }
 
-    fn update(&mut self, master : &mut GamePieceBase, _servah : &mut Server) {
-        match master.targeting.vector_to {
+    fn update(&mut self, properties : &mut ExposedProperties, _servah : &mut Server) {
+        match properties.targeting.vector_to {
             Some(vector_to) => {
                 let goalangle = vector_to.angle();
-                master.physics.change_angle(loopize(goalangle, master.physics.angle()) * 0.2);
-                master.physics.thrust(1.0);
-                if (master.physics.velocity.angle() - goalangle).abs() > PI/4.0 {
-                    master.physics.velocity = master.physics.velocity * 0.95;
+                properties.physics.change_angle(loopize(goalangle, properties.physics.angle()) * 0.2);
+                properties.physics.thrust(1.0);
+                if (properties.physics.velocity.angle() - goalangle).abs() > PI/4.0 {
+                    properties.physics.velocity = properties.physics.velocity * 0.95;
                 }
             },
             None => {}
         }
         if self.start_cooldown != 0 {
             self.start_cooldown -= 1;
-            master.physics.velocity = master.physics.velocity * 0.8;
+            properties.physics.velocity = properties.physics.velocity * 0.8;
         }
     }
 }
 
 impl GamePiece for Target {
-    fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
+    fn construct<'a>(&'a self, thing : &mut ExposedProperties) {
         thing.ttl = 1800;
-        thing.max_health = 3.0;
-        thing.speed_cap = 10.0;
+        thing.health_properties.max_health = 3.0;
+        thing.physics.speed_cap = 10.0;
         thing.collision_info.damage = 0.1; // inoffensive
-        thing
     }
 
     fn obtain_physics(&self) -> PhysicsObject {
@@ -218,14 +214,14 @@ impl GamePiece for Target {
         30
     }
 
-    fn update(&mut self, master : &mut GamePieceBase, server : &mut Server) {
-        if master.physics.velocity.magnitude() != master.speed_cap || self.count == 0 {
+    fn update(&mut self, properties : &mut ExposedProperties, server : &mut Server) {
+        if properties.physics.velocity.magnitude() != properties.physics.speed_cap || self.count == 0 {
             let item = rand::random::<f32>() * PI * 2.0;
-            master.physics.velocity = Vector2::new_from_manda(master.speed_cap, item);
+            properties.physics.velocity = Vector2::new_from_manda(properties.physics.speed_cap, item);
             self.count = 60;
         }
         self.count -= 1;
-        master.physics.set_cx(coterminal(master.physics.cx(), server.gamesize as f32));
-        master.physics.set_cy(coterminal(master.physics.cy(), server.gamesize as f32));
+        properties.physics.set_cx(coterminal(properties.physics.cx(), server.gamesize as f32));
+        properties.physics.set_cy(coterminal(properties.physics.cy(), server.gamesize as f32));
     }
 }

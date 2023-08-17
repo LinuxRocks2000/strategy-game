@@ -1,5 +1,4 @@
 // Miscellaneous stuff like bullets and turrets and walls
-use super::GamePieceBase;
 use super::GamePiece;
 use crate::Server;
 use crate::physics::PhysicsObject;
@@ -10,6 +9,7 @@ use crate::ProtocolMessage;
 use crate::vector::Vector2;
 use super::BulletType;
 use crate::functions::*;
+use crate::ExposedProperties;
 use std::f32::consts::PI;
 
 pub struct Bullet {}
@@ -96,10 +96,9 @@ impl Block {
 
 
 impl GamePiece for Bullet {
-    fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
+    fn construct<'a>(&'a self, thing : &mut ExposedProperties) {
         thing.ttl = 30;
-        thing.max_health = 1.0;
-        thing
+        thing.health_properties.max_health = 1.0;
     }
 
     fn obtain_physics(&self) -> PhysicsObject {
@@ -112,13 +111,12 @@ impl GamePiece for Bullet {
 }
 
 impl GamePiece for AntiRTFBullet {
-    fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
+    fn construct<'a>(&'a self, thing : &mut ExposedProperties) {
         thing.targeting.mode = TargetingMode::Nearest;
         thing.targeting.filter = TargetingFilter::RealTimeFighter;
         thing.targeting.range = (0.0, 5000.0); // losing these guys is possible, but not easy
-        thing.max_health = 2.0;
+        thing.health_properties.max_health = 2.0;
         thing.collision_info.damage = 5.0;
-        thing
     }
 
     fn obtain_physics(&self) -> PhysicsObject {
@@ -129,20 +127,20 @@ impl GamePiece for AntiRTFBullet {
         'a'
     }
     
-    fn update(&mut self, master : &mut GamePieceBase, _server : &mut Server) {
-        match master.targeting.vector_to {
+    fn update(&mut self, properties : &mut ExposedProperties, _server : &mut Server) {
+        match properties.targeting.vector_to {
             Some(vector_to) => {
                 let goalangle = vector_to.angle();
-                master.physics.change_angle(loopize(goalangle, master.physics.angle()) * 0.4);
+                properties.physics.change_angle(loopize(goalangle, properties.physics.angle()) * 0.4);
                 if vector_to.magnitude() > 500.0 {
-                    master.physics.thrust(2.0); // go way faster if it's far away
+                    properties.physics.thrust(2.0); // go way faster if it's far away
                 }
                 else {
-                    master.physics.velocity = master.physics.velocity * 0.99; // add a lil' friction so it can decelerate after going super fast cross-board
-                    master.physics.thrust(1.0); // but also keep some thrust so the angle correction isn't moot
+                    properties.physics.velocity = properties.physics.velocity * 0.99; // add a lil' friction so it can decelerate after going super fast cross-board
+                    properties.physics.thrust(1.0); // but also keep some thrust so the angle correction isn't moot
                 }
-                if (master.physics.velocity.angle() - goalangle).abs() > PI/3.0 {
-                    master.physics.velocity = master.physics.velocity * 0.9;
+                if (properties.physics.velocity.angle() - goalangle).abs() > PI/3.0 {
+                    properties.physics.velocity = properties.physics.velocity * 0.9;
                 }
             },
             None => {}
@@ -155,10 +153,9 @@ impl GamePiece for AntiRTFBullet {
 }
 
 impl GamePiece for Wall {
-    fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
-        thing.max_health = 2.0;
+    fn construct<'a>(&'a self, thing : &mut ExposedProperties) {
+        thing.health_properties.max_health = 2.0;
         thing.ttl = 1800;
-        thing
     }
 
     fn identify(&self) -> char {
@@ -175,10 +172,9 @@ impl GamePiece for Wall {
 }
 
 impl GamePiece for Chest {
-    fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
-        thing.max_health = 2.0;
+    fn construct<'a>(&'a self, thing : &mut ExposedProperties) {
+        thing.health_properties.max_health = 2.0;
         thing.ttl = 4800;
-        thing
     }
 
     fn identify(&self) -> char {
@@ -199,13 +195,12 @@ impl GamePiece for Chest {
 }
 
 impl GamePiece for Turret {
-    fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
+    fn construct<'a>(&'a self, thing : &mut ExposedProperties) {
         thing.targeting.mode = TargetingMode::Nearest;
         thing.targeting.filter = TargetingFilter::Fighters;
         thing.targeting.range = (0.0, 500.0);
         thing.shooter_properties.shoot = true;
         thing.shooter_properties.counter = 30;
-        thing
     }
 
     fn identify(&self) -> char {
@@ -216,10 +211,10 @@ impl GamePiece for Turret {
         PhysicsObject::new(0.0, 0.0, 48.0, 22.0, 0.0)
     }
 
-    fn update(&mut self, master : &mut GamePieceBase, _server : &mut Server) {
-        match master.targeting.vector_to {
+    fn update(&mut self, properties : &mut ExposedProperties, _server : &mut Server) {
+        match properties.targeting.vector_to {
             Some(vector) => {
-                master.physics.set_angle(vector.angle());
+                properties.physics.set_angle(vector.angle());
             },
             None => {}
         };
@@ -231,7 +226,7 @@ impl GamePiece for Turret {
 }
 
 impl GamePiece for MissileLaunchingSystem {
-    fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
+    fn construct<'a>(&'a self, thing : &mut ExposedProperties) {
         thing.targeting.mode = TargetingMode::Nearest;
         thing.targeting.filter = TargetingFilter::RealTimeFighter;
         thing.targeting.range = (0.0, 1000.0);
@@ -240,7 +235,6 @@ impl GamePiece for MissileLaunchingSystem {
         thing.shooter_properties.counter = 150;
         thing.shooter_properties.range = 1000;
         thing.collision_info.damage = 5.0;
-        thing
     }
 
     fn identify(&self) -> char {
@@ -251,14 +245,14 @@ impl GamePiece for MissileLaunchingSystem {
         PhysicsObject::new(0.0, 0.0, 48.0, 22.0, 0.0)
     }
 
-    fn update(&mut self, master : &mut GamePieceBase, _server : &mut Server) {
-        match master.targeting.vector_to {
+    fn update(&mut self, properties : &mut ExposedProperties, _server : &mut Server) {
+        match properties.targeting.vector_to {
             Some(vector) => {
-                master.physics.set_angle(vector.angle());
-                master.shooter_properties.suppress = false;
+                properties.physics.set_angle(vector.angle());
+                properties.shooter_properties.suppress = false;
             },
             None => {
-                master.shooter_properties.suppress = true; // don't fire when there isn't a target, these guys are supposed to be more convenient than regular turrets
+                properties.shooter_properties.suppress = true; // don't fire when there isn't a target, these guys are supposed to be more convenient than regular turrets
             }
         };
     }
@@ -277,16 +271,16 @@ impl GamePiece for Radiation {
         PhysicsObject::new(0.0, 0.0, self.w, self.h, 0.0)
     }
 
-    fn update(&mut self, master : &mut GamePieceBase, _server : &mut Server) {
+    fn update(&mut self, properties : &mut ExposedProperties, server : &mut Server) {
         let strength = (0.5_f32).powf(self.counter/self.halflife) * self.strength;
         self.counter += 1.0;
-        master.collision_info.damage = strength/15.0;
-        master.broadcast(ProtocolMessage {
+        properties.collision_info.damage = strength/15.0;
+        server.broadcast(ProtocolMessage {
             command: 'r',
-            args: vec![master.get_id().to_string(), strength.to_string()]
+            args: vec![properties.id.to_string(), strength.to_string()]
         });
         if strength < 0.01 {
-            master.health = 0.0;
+            properties.health_properties.health = 0.0;
         }
     }
 
@@ -296,14 +290,13 @@ impl GamePiece for Radiation {
 }
 
 impl GamePiece for Nuke {
-    fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
+    fn construct<'a>(&'a self, thing : &mut ExposedProperties) {
         thing.exploder = vec![
             ExplosionMode::Radiation(100.0, 60.0, 0.7),
             ExplosionMode::Radiation(600.0, 250.0, 0.2)
         ];
         thing.collision_info.damage = 0.0;
         thing.ttl = 500;
-        thing
     }
 
     fn identify(&self) -> char {
@@ -318,10 +311,10 @@ impl GamePiece for Nuke {
         300
     }
 
-    fn update(&mut self, master : &mut GamePieceBase, _server : &mut Server) {
-        let thrust = Vector2::new(master.goal_x - master.physics.cx(), master.goal_y - master.physics.cy()).unit() * 0.1;
-        master.physics.velocity = master.physics.velocity + thrust;
-        master.physics.velocity = master.physics.velocity * 0.999;
+    fn update(&mut self, properties : &mut ExposedProperties, _server : &mut Server) {
+        let thrust = Vector2::new(properties.goal_x - properties.physics.cx(), properties.goal_y - properties.physics.cy()).unit() * 0.1;
+        properties.physics.velocity = properties.physics.velocity + thrust;
+        properties.physics.velocity = properties.physics.velocity * 0.999;
     }
 
     fn is_editable(&self) -> bool {
@@ -330,21 +323,20 @@ impl GamePiece for Nuke {
 }
 
 impl GamePiece for Block {
-    fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
+    fn construct<'a>(&'a self, thing : &mut ExposedProperties) {
         thing.physics.mass *= 1.0;//100.0; // Very high density: inexorable push
         thing.collision_info.damage = 0.0; // Does no collision damage
         thing.physics.solid = true;
-        thing.max_health = 1000.0;
+        thing.health_properties.max_health = 1000.0;
         thing.physics.fixed = true;
-        thing
     }
 
     fn identify(&self) -> char {
         'B'
     }
 
-    fn update(&mut self, master : &mut GamePieceBase, _server : &mut Server) {
-        master.health = master.max_health; // it cannot die
+    fn update(&mut self, properties : &mut ExposedProperties, _server : &mut Server) {
+        properties.health_properties.health = properties.health_properties.max_health; // it cannot die
     }
 
     fn obtain_physics(&self) -> PhysicsObject {

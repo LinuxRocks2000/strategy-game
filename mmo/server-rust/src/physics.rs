@@ -116,6 +116,7 @@ impl BoxShape {
 }
 
 
+#[derive(Clone)]
 pub struct PhysicsObject {
     pub shape         : BoxShape,
     pub old_shape     : BoxShape,
@@ -124,7 +125,9 @@ pub struct PhysicsObject {
     pub angle_v       : f32,
     pub mass          : f32,
     pub fixed         : bool,
-    pub restitution : f32
+    pub restitution   : f32,
+    pub portals       : bool,
+    pub speed_cap     : f32
 }
 
 
@@ -140,7 +143,9 @@ impl PhysicsObject {
             angle_v : 0.0,
             fixed : false,
             mass : w * h, // Assume a density of 1. If you want to change the *density* elsewhere, just multiply it by the new density!
-            restitution : 0.5 // Assume collisions are truly inelastic by default
+            restitution : 0.5, // Assume collisions are truly inelastic by default
+            portals : false,
+            speed_cap : 0.0
         }
     }
 

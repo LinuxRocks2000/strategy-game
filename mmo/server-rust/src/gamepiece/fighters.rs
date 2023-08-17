@@ -1,10 +1,10 @@
 // Grand unified file for fighter types
 
-use super::GamePieceBase;
 use super::GamePiece;
 use crate::Server;
 use crate::physics::PhysicsObject;
 use crate::vector::Vector2;
+use crate::ExposedProperties;
 use std::f32::consts::PI;
 
 
@@ -40,10 +40,9 @@ impl Missile {
 
 
 impl GamePiece for BasicFighter {
-    fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
+    fn construct<'a>(&'a self, thing : &mut ExposedProperties) {
         thing.shooter_properties.shoot = true;
         thing.shooter_properties.counter = 30;
-        thing
     }
 
     fn obtain_physics(&self) -> PhysicsObject {
@@ -62,17 +61,17 @@ impl GamePiece for BasicFighter {
         10
     }
 
-    fn update(&mut self, master : &mut GamePieceBase, _servah : &mut Server) {
-        let mut thrust = Vector2::new(master.goal_x - master.physics.cx(), master.goal_y - master.physics.cy());
+    fn update(&mut self, properties : &mut ExposedProperties, _servah : &mut Server) {
+        let mut thrust = Vector2::new(properties.goal_x - properties.physics.cx(), properties.goal_y - properties.physics.cy());
         if thrust.magnitude() < 10.0 {
-            master.physics.set_angle(master.goal_a);
+            properties.physics.set_angle(properties.goal_a);
         }
         else {
             thrust = thrust.unit() * 0.25;
-            master.physics.set_angle(thrust.angle());
-            master.physics.velocity = master.physics.velocity + thrust;
+            properties.physics.set_angle(thrust.angle());
+            properties.physics.velocity = properties.physics.velocity + thrust;
         }
-        master.physics.velocity = master.physics.velocity * 0.95;
+        properties.physics.velocity = properties.physics.velocity * 0.95;
     }
 
     fn is_editable(&self) -> bool {
@@ -81,11 +80,10 @@ impl GamePiece for BasicFighter {
 }
 
 impl GamePiece for TieFighter {
-    fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
+    fn construct<'a>(&'a self, thing : &mut ExposedProperties) {
         thing.shooter_properties.shoot = true;
         thing.shooter_properties.counter = 40;
         thing.shooter_properties.angles = vec![0.0, PI];
-        thing
     }
 
     fn obtain_physics(&self) -> PhysicsObject {
@@ -104,17 +102,17 @@ impl GamePiece for TieFighter {
         20
     }
 
-    fn update(&mut self, master : &mut GamePieceBase, _servah : &mut Server) {
-        let mut thrust = Vector2::new(master.goal_x - master.physics.cx(), master.goal_y - master.physics.cy());
+    fn update(&mut self, properties : &mut ExposedProperties, _servah : &mut Server) {
+        let mut thrust = Vector2::new(properties.goal_x - properties.physics.cx(), properties.goal_y - properties.physics.cy());
         if thrust.magnitude() < 10.0 {
-            master.physics.set_angle(master.goal_a);
+            properties.physics.set_angle(properties.goal_a);
         }
         else {
             thrust = thrust.unit() * 0.35;
-            master.physics.set_angle(thrust.angle());
-            master.physics.velocity = master.physics.velocity + thrust;
+            properties.physics.set_angle(thrust.angle());
+            properties.physics.velocity = properties.physics.velocity + thrust;
         }
-        master.physics.velocity = master.physics.velocity * 0.95;
+        properties.physics.velocity = properties.physics.velocity * 0.95;
     }
 
     fn is_editable(&self) -> bool {
@@ -123,11 +121,10 @@ impl GamePiece for TieFighter {
 }
 
 impl GamePiece for Sniper {
-    fn construct<'a>(&'a self, thing : &'a mut GamePieceBase) -> &mut GamePieceBase {
+    fn construct<'a>(&'a self, thing : &mut ExposedProperties) {
         thing.shooter_properties.shoot = true;
         thing.shooter_properties.counter = 80;
         thing.shooter_properties.range = 90;
-        thing
     }
 
     fn obtain_physics(&self) -> PhysicsObject {
@@ -146,17 +143,17 @@ impl GamePiece for Sniper {
         30
     }
 
-    fn update(&mut self, master : &mut GamePieceBase, _servah : &mut Server) {
-        let mut thrust = Vector2::new(master.goal_x - master.physics.cx(), master.goal_y - master.physics.cy());
+    fn update(&mut self, properties : &mut ExposedProperties, _servah : &mut Server) {
+        let mut thrust = Vector2::new(properties.goal_x - properties.physics.cx(), properties.goal_y - properties.physics.cy());
         if thrust.magnitude() < 10.0 {
-            master.physics.set_angle(master.goal_a);
+            properties.physics.set_angle(properties.goal_a);
         }
         else {
             thrust = thrust.unit() * 1.2;
-            master.physics.set_angle(thrust.angle());
-            master.physics.velocity = master.physics.velocity + thrust;
+            properties.physics.set_angle(thrust.angle());
+            properties.physics.velocity = properties.physics.velocity + thrust;
         }
-        master.physics.velocity = master.physics.velocity * 0.9;
+        properties.physics.velocity = properties.physics.velocity * 0.9;
     }
 
     fn is_editable(&self) -> bool {
@@ -181,12 +178,12 @@ impl GamePiece for Missile {
         5
     }
 
-    fn update(&mut self, master : &mut GamePieceBase, _servah : &mut Server) {
-        let goal = Vector2::new(master.goal_x - master.physics.cx(), master.goal_y - master.physics.cy());
-        master.physics.set_angle(master.physics.angle() * 0.9 + goal.angle() * 0.1);
-        let thrust = Vector2::new_from_manda(0.3, master.physics.angle());
-        master.physics.velocity = master.physics.velocity + thrust;
-        master.physics.velocity = master.physics.velocity * 0.99;
+    fn update(&mut self, properties : &mut ExposedProperties, _servah : &mut Server) {
+        let goal = Vector2::new(properties.goal_x - properties.physics.cx(), properties.goal_y - properties.physics.cy());
+        properties.physics.set_angle(properties.physics.angle() * 0.9 + goal.angle() * 0.1);
+        let thrust = Vector2::new_from_manda(0.3, properties.physics.angle());
+        properties.physics.velocity = properties.physics.velocity + thrust;
+        properties.physics.velocity = properties.physics.velocity * 0.99;
     }
 
     fn is_editable(&self) -> bool {
